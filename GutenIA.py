@@ -68,6 +68,7 @@ class GutenAIWindow(Gtk.ApplicationWindow):
         
         # Crear el menú
         menu = Gio.Menu()
+        menu.append("Atajos de teclado", "app.shortcuts")
         menu.append("Acerca de", "app.about")
         menu_button.set_menu_model(menu)
         header_bar.pack_end(menu_button)
@@ -102,6 +103,45 @@ class GutenAIWindow(Gtk.ApplicationWindow):
         self.status_page.set_icon_name("book-open-variant-symbolic")
         
         self.main_box.append(self.status_page)
+        
+        # Configurar atajos de teclado
+        self.setup_window_shortcuts()
+
+    def setup_window_shortcuts(self):
+        """Configurar atajos de teclado de la ventana"""
+        # Crear controller de atajos
+        shortcut_controller = Gtk.ShortcutController()
+        self.add_controller(shortcut_controller)
+        
+        # Abrir archivo (Ctrl+O)
+        open_shortcut = Gtk.Shortcut()
+        open_shortcut.set_trigger(Gtk.ShortcutTrigger.parse_string("<Ctrl>o"))
+        open_shortcut.set_action(Gtk.CallbackAction.new(lambda w, a: self.on_open_clicked(None)))
+        shortcut_controller.add_shortcut(open_shortcut)
+        
+        # Guardar (Ctrl+S)
+        save_shortcut = Gtk.Shortcut()
+        save_shortcut.set_trigger(Gtk.ShortcutTrigger.parse_string("<Ctrl>s"))
+        save_shortcut.set_action(Gtk.CallbackAction.new(lambda w, a: self.on_save_clicked(None) if hasattr(self, 'save_button') else None))
+        shortcut_controller.add_shortcut(save_shortcut)
+        
+        # Toggle sidebar izquierdo (F9)
+        sidebar_shortcut = Gtk.Shortcut()
+        sidebar_shortcut.set_trigger(Gtk.ShortcutTrigger.parse_string("F9"))
+        sidebar_shortcut.set_action(Gtk.CallbackAction.new(lambda w, a: self.sidebar_button.set_active(not self.sidebar_button.get_active())))
+        shortcut_controller.add_shortcut(sidebar_shortcut)
+        
+        # Toggle preview (Ctrl+P)
+        preview_shortcut = Gtk.Shortcut()
+        preview_shortcut.set_trigger(Gtk.ShortcutTrigger.parse_string("<Ctrl>p"))
+        preview_shortcut.set_action(Gtk.CallbackAction.new(lambda w, a: self.preview_button.set_active(not self.preview_button.get_active())))
+        shortcut_controller.add_shortcut(preview_shortcut)
+        
+        # Preview fullscreen (Ctrl+Shift+P)
+        fullscreen_shortcut = Gtk.Shortcut()
+        fullscreen_shortcut.set_trigger(Gtk.ShortcutTrigger.parse_string("<Ctrl><Shift>p"))
+        fullscreen_shortcut.set_action(Gtk.CallbackAction.new(lambda w, a: self.on_preview_fullscreen(None)))
+        shortcut_controller.add_shortcut(fullscreen_shortcut)
 
     def create_sidebar(self):
         """Crear sidebar con las secciones del EPUB"""
@@ -315,7 +355,6 @@ class GutenAIWindow(Gtk.ApplicationWindow):
         fullscreen_window.present()
         
         print(f"Abriendo preview fullscreen de: {self.current_file['name']}")
-        
 
     def update_preview(self):
         """Actualizar contenido de la previsualización"""
@@ -854,6 +893,22 @@ class GutenAIApplication(Adw.Application):
         about_action = Gio.SimpleAction.new("about", None)
         about_action.connect("activate", self.on_about_action)
         self.add_action(about_action)
+        
+        # Crear acción para "Atajos de teclado"
+        shortcuts_action = Gio.SimpleAction.new("shortcuts", None)
+        shortcuts_action.connect("activate", self.on_shortcuts_action)
+        self.add_action(shortcuts_action)
+        
+        # Configurar atajos de teclado globales
+        self.setup_shortcuts()
+
+    def setup_shortcuts(self):
+        """Configurar atajos de teclado de la aplicación"""
+        # Atajo para mostrar ventana de atajos
+        self.set_accels_for_action("app.shortcuts", ["<Ctrl>question"])
+        
+        # Atajos para la aplicación
+        self.set_accels_for_action("app.quit", ["<Ctrl>q"])
 
     def on_activate(self, app):
         self.win = GutenAIWindow(application=app)
@@ -864,6 +919,137 @@ class GutenAIApplication(Adw.Application):
         from about import create_about_window
         about = create_about_window(self.win)
         about.present()
+
+    def on_shortcuts_action(self, action, param):
+        """Mostrar ventana de atajos de teclado"""
+        shortcuts_window = self.create_shortcuts_window()
+        shortcuts_window.set_transient_for(self.win)
+        shortcuts_window.present()
+
+    def create_shortcuts_window(self):
+        """Crear ventana de atajos de teclado"""
+        builder = Gtk.Builder()
+        
+        # Definir XML para la ventana de atajos
+        shortcuts_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <object class="GtkShortcutsWindow" id="shortcuts_window">
+    <property name="modal">1</property>
+    <child>
+      <object class="GtkShortcutsSection">
+        <property name="visible">1</property>
+        <property name="section-name">general</property>
+        <property name="title" translatable="yes">General</property>
+        <child>
+          <object class="GtkShortcutsGroup">
+            <property name="visible">1</property>
+            <property name="title" translatable="yes">Archivo</property>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Abrir EPUB</property>
+                <property name="accelerator">&lt;Ctrl&gt;o</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Guardar cambios</property>
+                <property name="accelerator">&lt;Ctrl&gt;s</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Salir</property>
+                <property name="accelerator">&lt;Ctrl&gt;q</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcutsGroup">
+            <property name="visible">1</property>
+            <property name="title" translatable="yes">Vista</property>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Mostrar/Ocultar sidebar izquierdo</property>
+                <property name="accelerator">F9</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Mostrar/Ocultar previsualización</property>
+                <property name="accelerator">&lt;Ctrl&gt;p</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Previsualización en ventana separada</property>
+                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;p</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcutsGroup">
+            <property name="visible">1</property>
+            <property name="title" translatable="yes">Edición</property>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Deshacer</property>
+                <property name="accelerator">&lt;Ctrl&gt;z</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Rehacer</property>
+                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;z</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Buscar</property>
+                <property name="accelerator">&lt;Ctrl&gt;f</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Buscar y reemplazar</property>
+                <property name="accelerator">&lt;Ctrl&gt;h</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkShortcutsGroup">
+            <property name="visible">1</property>
+            <property name="title" translatable="yes">Ayuda</property>
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="title" translatable="yes">Atajos de teclado</property>
+                <property name="accelerator">&lt;Ctrl&gt;question</property>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>"""
+        
+        builder.add_from_string(shortcuts_xml)
+        shortcuts_window = builder.get_object("shortcuts_window")
+        
+        return shortcuts_window
 
 def main():
     app = GutenAIApplication()
