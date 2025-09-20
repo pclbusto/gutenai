@@ -1,0 +1,27 @@
+site_name: Guten.AI
+site_description: "Editor de libros EPUB con inteligencia artificial"
+site_author: "Pedro Busto"
+repo_url: "https://github.com/bustobusto/gutenai"
+repo_name: "bustobusto/gutenai"
+
+# theme:
+#   name: material
+#   language: es
+#   features:
+#     - navigation.expand
+#     - navigation.sections
+#     - navigation.top
+#     - content.code.copy
+#     - search.highlight
+#     - search.share
+#     - toc.integrate
+
+nav:
+  - Home: index.md
+  - Instalación: install.md
+  - Uso básico: usage.md
+  - Funcionalidades: features.md
+  - Integración con IA: ai.md
+  - Arquitectura: architecture.md
+  - Créditos: credits.md
+  - Licencia: license.md
