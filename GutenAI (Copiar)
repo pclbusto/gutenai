@@ -1,0 +1,1864 @@
+#!/usr/bin/env python3
+
+import gi
+gi.require_version('Gtk', '4.0')
+gi.require_version('Adw', '1')
+gi.require_version('WebKit', '6.0')
+gi.require_version('GtkSource', '5')
+
+from gi.repository import Gtk, Adw, Gio, GLib, WebKit, GtkSource, Pango, GdkPixbuf, GObject
+import ebooklib
+from ebooklib import epub
+import os
+import mimetypes
+from pathlib import Path
+import tempfile
+import html
+import json
+import re
+from typing import Optional, Dict, List, Any
+
+class EPUBResourceManager:
+    """Maneja la estructura y recursos del EPUB usando ebooklib"""
+    
+    def __init__(self):
+        self.book: Optional[epub.EpubBook] = None
+        self.resources: Dict[str, Dict] = {
+            'text': [],
+            'styles': [],
+            'images': [],
+            'fonts': [],
+            'audio': [],
+            'video': [],
+            'others': []
+        }
+        
+    def load_epub(self, filepath: str) -> bool:
+        """Carga un archivo EPUB y organiza sus recursos"""
+        try:
+            self.book = epub.read_epub(filepath)
+            self._categorize_resources()
+            return True
+        except Exception as e:
+            print(f"Error loading EPUB: {e}")
+            return False
+    
+    def _categorize_resources(self):
+        """Categoriza los recursos según ebooklib"""
+        if not self.book:
+            return
+            
+        # Reset categories
+        for category in self.resources:
+            self.resources[category] = []
+        
+        # Categorize items
+        for item in self.book.get_items():
+            item_type = item.get_type()
+            
+            if item_type == ebooklib.ITEM_DOCUMENT:
+                self.resources['text'].append({
+                    'name': item.get_name(),
+                    'item': item,
+                    'type': 'html',
+                    'in_spine': item in self.book.spine,
+                    'icon': '📄'
+                })
+            elif item_type == ebooklib.ITEM_STYLE:
+                self.resources['styles'].append({
+                    'name': item.get_name(),
+                    'item': item,
+                    'type': 'css',
+                    'icon': '🎨'
+                })
+            elif item_type == ebooklib.ITEM_IMAGE:
+                self.resources['images'].append({
+                    'name': item.get_name(),
+                    'item': item,
+                    'type': 'image',
+                    'icon': '🖼️'
+                })
+            elif hasattr(item, 'get_name') and any(item.get_name().endswith(ext) for ext in ['.ttf', '.otf', '.woff', '.woff2']):
+                self.resources['fonts'].append({
+                    'name': item.get_name(),
+                    'item': item,
+                    'type': 'font',
+                    'icon': '🔤'
+                })
+            elif hasattr(item, 'get_name') and any(item.get_name().endswith(ext) for ext in ['.mp3', '.wav', '.ogg']):
+                self.resources['audio'].append({
+                    'name': item.get_name(),
+                    'item': item,
+                    'type': 'audio',
+                    'icon': '🎵'
+                })
+            elif hasattr(item, 'get_name') and any(item.get_name().endswith(ext) for ext in ['.mp4', '.webm', '.ogv']):
+                self.resources['video'].append({
+                    'name': item.get_name(),
+                    'item': item,
+                    'type': 'video',
+                    'icon': '🎥'
+                })
+            else:
+                self.resources['others'].append({
+                    'name': item.get_name() if hasattr(item, 'get_name') else str(item),
+                    'item': item,
+                    'type': 'other',
+                    'icon': '📦'
+                })
+
+class SearchDialog(Adw.Window):
+    """Diálogo de búsqueda global"""
+    
+    def __init__(self, parent, epub_manager):
+        super().__init__()
+        self.set_transient_for(parent)
+        self.set_modal(True)
+        self.set_title("Global Search")
+        self.set_default_size(600, 400)
+        
+        self.epub_manager = epub_manager
+        
+        # Setup UI
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        
+        # Search entry
+        self.search_entry = Gtk.SearchEntry()
+        self.search_entry.set_placeholder_text("Search across all book content...")
+        self.search_entry.connect("search-changed", self.on_search_changed)
+        box.append(self.search_entry)
+        
+        # Results list
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_vexpand(True)
+        
+        self.results_list = Gtk.ListBox()
+        self.results_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        scrolled.set_child(self.results_list)
+        box.append(scrolled)
+        
+        self.set_content(box)
+        
+    def on_search_changed(self, entry):
+        """Realizar búsqueda en tiempo real"""
+        query = entry.get_text().strip()
+        if len(query) < 3:
+            return
+            
+        # Clear previous results
+        while True:
+            row = self.results_list.get_first_child()
+            if row is None:
+                break
+            self.results_list.remove(row)
+        
+        # Search through text resources
+        for resource in self.epub_manager.resources['text']:
+            try:
+                content = resource['item'].get_content().decode('utf-8')
+                if query.lower() in content.lower():
+                    self.add_search_result(resource['name'], content, query)
+            except:
+                pass
+    
+    def add_search_result(self, filename, content, query):
+        """Agregar resultado de búsqueda"""
+        # Find context around the match
+        lines = content.split('\n')
+        for i, line in enumerate(lines):
+            if query.lower() in line.lower():
+                context = line.strip()[:100] + "..." if len(line) > 100 else line.strip()
+                
+                row = Gtk.ListBoxRow()
+                box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+                box.set_margin_start(8)
+                box.set_margin_end(8)
+                box.set_margin_top(8)
+                box.set_margin_bottom(8)
+                
+                title = Gtk.Label(label=filename)
+                title.set_halign(Gtk.Align.START)
+                title.add_css_class("heading")
+                
+                snippet = Gtk.Label(label=context)
+                snippet.set_halign(Gtk.Align.START)
+                snippet.add_css_class("dim-label")
+                snippet.set_ellipsize(Pango.EllipsizeMode.END)
+                
+                box.append(title)
+                box.append(snippet)
+                row.set_child(box)
+                
+                self.results_list.append(row)
+                break
+
+class CommandPalette(Adw.Window):
+    """Command Palette para ejecutar comandos rápidos"""
+    
+    def __init__(self, parent):
+        super().__init__()
+        self.set_transient_for(parent)
+        self.set_modal(True)
+        self.set_title("Command Palette")
+        self.set_default_size(500, 300)
+        
+        self.parent_window = parent
+        
+        # Commands list
+        self.commands = [
+            {"name": "Open EPUB File", "action": "open_file", "shortcut": "Ctrl+O"},
+            {"name": "Save Current Resource", "action": "save", "shortcut": "Ctrl+S"},
+            {"name": "Toggle Left Sidebar", "action": "toggle_left", "shortcut": "Ctrl+1"},
+            {"name": "Toggle Right Sidebar", "action": "toggle_right", "shortcut": "Ctrl+2"},
+            {"name": "Global Search", "action": "search", "shortcut": "Ctrl+F"},
+            {"name": "Preview Fullscreen", "action": "preview_fullscreen", "shortcut": "F11"},
+            {"name": "Validate EPUB", "action": "validate", "shortcut": "Ctrl+Shift+V"},
+            {"name": "Export EPUB", "action": "export", "shortcut": "Ctrl+E"},
+        ]
+        
+        # Setup UI
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        
+        # Command entry
+        self.command_entry = Gtk.SearchEntry()
+        self.command_entry.set_placeholder_text("Type a command...")
+        self.command_entry.connect("search-changed", self.filter_commands)
+        self.command_entry.connect("activate", self.execute_selected)
+        box.append(self.command_entry)
+        
+        # Commands list
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_vexpand(True)
+        
+        self.commands_list = Gtk.ListBox()
+        self.commands_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.commands_list.connect("row-activated", self.on_command_selected)
+        scrolled.set_child(self.commands_list)
+        box.append(scrolled)
+        
+        self.populate_commands()
+        self.set_content(box)
+        
+    def populate_commands(self):
+        """Llenar la lista de comandos"""
+        for cmd in self.commands:
+            row = Gtk.ListBoxRow()
+            row.command = cmd
+            
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            box.set_margin_start(8)
+            box.set_margin_end(8)
+            box.set_margin_top(8)
+            box.set_margin_bottom(8)
+            
+            name_label = Gtk.Label(label=cmd["name"])
+            name_label.set_halign(Gtk.Align.START)
+            name_label.set_hexpand(True)
+            
+            shortcut_label = Gtk.Label(label=cmd["shortcut"])
+            shortcut_label.add_css_class("dim-label")
+            shortcut_label.set_halign(Gtk.Align.END)
+            
+            box.append(name_label)
+            box.append(shortcut_label)
+            row.set_child(box)
+            
+            self.commands_list.append(row)
+    
+    def filter_commands(self, entry):
+        """Filtrar comandos según el texto ingresado"""
+        query = entry.get_text().lower()
+        
+        row = self.commands_list.get_first_child()
+        while row:
+            next_row = row.get_next_sibling()
+            if query in row.command["name"].lower():
+                row.set_visible(True)
+            else:
+                row.set_visible(False)
+            row = next_row
+    
+    def execute_selected(self, entry):
+        """Ejecutar el comando seleccionado"""
+        selected = self.commands_list.get_selected_row()
+        if selected:
+            self.execute_command(selected.command)
+    
+    def on_command_selected(self, listbox, row):
+        """Manejar selección de comando"""
+        self.execute_command(row.command)
+    
+    def execute_command(self, command):
+        """Ejecutar un comando específico"""
+        action = command["action"]
+        
+        if action == "open_file":
+            self.parent_window.open_epub_dialog(None)
+        elif action == "save":
+            self.parent_window.save_current_resource(None)
+        elif action == "toggle_left":
+            self.parent_window.toggle_left_sidebar(None)
+        elif action == "toggle_right":
+            self.parent_window.toggle_right_sidebar(None)
+        elif action == "search":
+            self.parent_window.show_search(None)
+        elif action == "preview_fullscreen":
+            self.parent_window.open_preview_fullscreen(None)
+        
+        self.close()
+
+class EPUBSidebar(Gtk.Box):
+    """Sidebar izquierdo para estructura del EPUB"""
+    
+    def __init__(self, epub_manager, on_resource_selected):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        
+        self.epub_manager = epub_manager
+        self.on_resource_selected = on_resource_selected
+        
+        self.set_size_request(300, -1)
+        self.add_css_class("sidebar")
+        
+        # Header
+        header = Adw.HeaderBar()
+        header.set_title_widget(Gtk.Label(label="EPUB Structure"))
+        header.add_css_class("flat")
+        self.append(header)
+        
+        # Search in sidebar
+        self.sidebar_search = Gtk.SearchEntry()
+        self.sidebar_search.set_placeholder_text("Filter resources...")
+        self.sidebar_search.connect("search-changed", self.filter_resources)
+        self.sidebar_search.set_margin_start(12)
+        self.sidebar_search.set_margin_end(12)
+        self.sidebar_search.set_margin_top(6)
+        self.sidebar_search.set_margin_bottom(6)
+        self.append(self.sidebar_search)
+        
+        # Modern list view instead of deprecated TreeView
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_vexpand(True)
+        
+        # Create list store and selection model
+        self.list_store = Gio.ListStore()
+        self.selection_model = Gtk.SingleSelection.new(self.list_store)
+        
+        # Create list view
+        self.list_view = Gtk.ListView.new(self.selection_model, None)
+        
+        # Create factory for list items
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self.on_factory_setup)
+        factory.connect("bind", self.on_factory_bind)
+        self.list_view.set_factory(factory)
+        
+        # Connect selection signal
+        self.selection_model.connect("selection-changed", self.on_selection_changed)
+        
+        scrolled.set_child(self.list_view)
+        self.append(scrolled)
+        
+        # Store categories and items for easy access
+        self.items_data = []
+        
+    def on_factory_setup(self, factory, list_item):
+        """Setup list item widget"""
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        box.set_margin_start(8)
+        box.set_margin_end(8)
+        box.set_margin_top(4)
+        box.set_margin_bottom(4)
+        
+        icon_label = Gtk.Label()
+        icon_label.set_size_request(24, -1)
+        
+        name_label = Gtk.Label()
+        name_label.set_halign(Gtk.Align.START)
+        name_label.set_hexpand(True)
+        
+        box.append(icon_label)
+        box.append(name_label)
+        
+        list_item.set_child(box)
+    
+    def on_factory_bind(self, factory, list_item):
+        """Bind data to list item"""
+        item_data = list_item.get_item()
+        box = list_item.get_child()
+        
+        icon_label = box.get_first_child()
+        name_label = icon_label.get_next_sibling()
+        
+        icon_label.set_text(item_data.icon)
+        name_label.set_text(item_data.name)
+        
+        # Style category headers differently
+        if item_data.is_category:
+            name_label.add_css_class("heading")
+        else:
+            name_label.remove_css_class("heading")
+    
+    def on_selection_changed(self, selection_model, position, n_items):
+        """Handle selection changes"""
+        selected_item = selection_model.get_selected_item()
+        if selected_item and not selected_item.is_category and selected_item.epub_item:
+            self.on_resource_selected(selected_item.epub_item, selected_item.item_type)
+    
+    def load_structure(self):
+        """Cargar estructura del EPUB en el list view"""
+        self.list_store.remove_all()
+        self.items_data.clear()
+        
+        categories = [
+            ('text', '📄', 'Text'),
+            ('styles', '🎨', 'Styles'),
+            ('images', '🖼️', 'Images'),
+            ('fonts', '🔤', 'Fonts'),
+            ('audio', '🎵', 'Audio'),
+            ('video', '🎥', 'Video'),
+            ('others', '📦', 'Others')
+        ]
+        
+        for category_key, icon, name in categories:
+            resources = self.epub_manager.resources[category_key]
+            if resources:  # Only show categories with content
+                # Add category header
+                category_item = ResourceItem(
+                    icon=icon,
+                    name=name,
+                    is_category=True,
+                    epub_item=None,
+                    item_type='category'
+                )
+                self.list_store.append(category_item)
+                
+                # Add resources
+                for resource in resources:
+                    resource_item = ResourceItem(
+                        icon="",
+                        name=f"  {resource['name']}",  # Indent for hierarchy
+                        is_category=False,
+                        epub_item=resource['item'],
+                        item_type=resource['type']
+                    )
+                    self.list_store.append(resource_item)
+    
+    def filter_resources(self, entry):
+        """Filtrar recursos por nombre"""
+        query = entry.get_text().lower()
+        # TODO: Implement filtering with Gtk.FilterListModel
+        pass
+
+# Helper class for list items
+class ResourceItem(GObject.Object):
+    """Represents an item in the resource list"""
+    
+    def __init__(self, icon, name, is_category, epub_item, item_type):
+        super().__init__()
+        self.icon = icon
+        self.name = name
+        self.is_category = is_category
+        self.epub_item = epub_item
+        self.item_type = item_type
+
+class TextEditor(Gtk.Box):
+    """Editor de texto con resaltado de sintaxis HTML/XHTML"""
+    
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        
+        # Toolbar
+        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        toolbar.add_css_class("toolbar")
+        toolbar.set_margin_start(6)
+        toolbar.set_margin_end(6)
+        toolbar.set_margin_top(6)
+        toolbar.set_margin_bottom(6)
+        
+        # Format buttons
+        format_buttons = [
+            ("format-text-bold-symbolic", "Bold", self.insert_bold),
+            ("format-text-italic-symbolic", "Italic", self.insert_italic),
+            ("format-text-underline-symbolic", "Underline", self.insert_underline),
+        ]
+        
+        for icon, tooltip, callback in format_buttons:
+            btn = Gtk.Button.new_from_icon_name(icon)
+            btn.set_tooltip_text(tooltip)
+            btn.connect("clicked", callback)
+            toolbar.append(btn)
+        
+        # Separator
+        toolbar.append(Gtk.Separator.new(Gtk.Orientation.VERTICAL))
+        
+        # Heading dropdown
+        heading_dropdown = Gtk.DropDown.new_from_strings([
+            "Paragraph", "Heading 1", "Heading 2", "Heading 3", "Heading 4"
+        ])
+        heading_dropdown.set_tooltip_text("Change paragraph style")
+        heading_dropdown.connect("notify::selected", self.on_heading_changed)
+        toolbar.append(heading_dropdown)
+        
+        self.append(toolbar)
+        
+        # Source view with syntax highlighting
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_vexpand(True)
+        
+        self.source_view = GtkSource.View()
+        self.source_buffer = GtkSource.Buffer()
+        
+        # Setup syntax highlighting
+        self.setup_syntax_highlighting()
+        
+        self.source_view.set_buffer(self.source_buffer)
+        self.source_view.set_show_line_numbers(True)
+        self.source_view.set_show_line_marks(True)
+        self.source_view.set_tab_width(2)
+        self.source_view.set_insert_spaces_instead_of_tabs(True)
+        self.source_view.set_auto_indent(True)
+        self.source_view.set_wrap_mode(Gtk.WrapMode.WORD)
+        
+        scrolled.set_child(self.source_view)
+        self.append(scrolled)
+        
+        # Connect signals
+        self.source_buffer.connect("changed", self.on_text_changed)
+        
+        self.text_changed_callback = None
+    
+    def setup_syntax_highlighting(self):
+        """Configurar resaltado de sintaxis"""
+        language_manager = GtkSource.LanguageManager()
+        html_language = language_manager.get_language("html")
+        
+        if html_language:
+            self.source_buffer.set_language(html_language)
+        
+        # Set color scheme
+        style_manager = GtkSource.StyleSchemeManager()
+        scheme = style_manager.get_scheme("Adwaita")
+        if scheme:
+            self.source_buffer.set_style_scheme(scheme)
+    
+    def set_content(self, content: str):
+        """Establecer contenido del editor"""
+        self.source_buffer.set_text(content)
+    
+    def get_content(self) -> str:
+        """Obtener contenido del editor"""
+        start = self.source_buffer.get_start_iter()
+        end = self.source_buffer.get_end_iter()
+        return self.source_buffer.get_text(start, end, False)
+    
+    def on_text_changed(self, buffer):
+        """Manejar cambios de texto"""
+        if self.text_changed_callback:
+            content = self.get_content()
+            self.text_changed_callback(content)
+    
+    def set_text_changed_callback(self, callback):
+        """Establecer callback para cambios de texto"""
+        self.text_changed_callback = callback
+    
+    def insert_bold(self, button):
+        """Insertar texto en negrita"""
+        self.wrap_selection("<strong>", "</strong>")
+    
+    def insert_italic(self, button):
+        """Insertar texto en cursiva"""
+        self.wrap_selection("<em>", "</em>")
+    
+    def insert_underline(self, button):
+        """Insertar texto subrayado"""
+        self.wrap_selection("<u>", "</u>")
+    
+    def on_heading_changed(self, dropdown, param):
+        """Cambiar estilo de encabezado"""
+        selected = dropdown.get_selected()
+        tags = ["p", "h1", "h2", "h3", "h4"]
+        
+        if selected < len(tags):
+            tag = tags[selected]
+            self.wrap_selection(f"<{tag}>", f"</{tag}>")
+    
+    def wrap_selection(self, start_tag: str, end_tag: str):
+        """Envolver selección con etiquetas"""
+        buffer = self.source_buffer
+        
+        if buffer.get_has_selection():
+            start, end = buffer.get_selection_bounds()
+            selected_text = buffer.get_text(start, end, False)
+            
+            new_text = f"{start_tag}{selected_text}{end_tag}"
+            buffer.delete(start, end)
+            buffer.insert(start, new_text)
+        else:
+            # Insert at cursor
+            cursor = buffer.get_insert()
+            iter = buffer.get_iter_at_mark(cursor)
+            buffer.insert(iter, f"{start_tag}{end_tag}")
+            
+            # Move cursor between tags
+            new_iter = buffer.get_iter_at_mark(cursor)
+            new_iter.backward_chars(len(end_tag))
+            buffer.place_cursor(new_iter)
+
+class CSSEditor(Gtk.Box):
+    """Editor CSS con resaltado de sintaxis"""
+    
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        
+        # CSS-specific toolbar
+        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        toolbar.add_css_class("toolbar")
+        toolbar.set_margin_start(6)
+        toolbar.set_margin_end(6)
+        toolbar.set_margin_top(6)
+        toolbar.set_margin_bottom(6)
+        
+        # CSS helper buttons
+        color_btn = Gtk.Button.new_with_label("Color Picker")
+        color_btn.connect("clicked", self.show_color_picker)
+        toolbar.append(color_btn)
+        
+        validate_btn = Gtk.Button.new_with_label("Validate CSS")
+        validate_btn.connect("clicked", self.validate_css)
+        toolbar.append(validate_btn)
+        
+        self.append(toolbar)
+        
+        # Source view
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_vexpand(True)
+        
+        self.source_view = GtkSource.View()
+        self.source_buffer = GtkSource.Buffer()
+        
+        # Setup CSS syntax highlighting
+        language_manager = GtkSource.LanguageManager()
+        css_language = language_manager.get_language("css")
+        
+        if css_language:
+            self.source_buffer.set_language(css_language)
+        
+        style_manager = GtkSource.StyleSchemeManager()
+        scheme = style_manager.get_scheme("Adwaita")
+        if scheme:
+            self.source_buffer.set_style_scheme(scheme)
+        
+        self.source_view.set_buffer(self.source_buffer)
+        self.source_view.set_show_line_numbers(True)
+        self.source_view.set_tab_width(2)
+        self.source_view.set_insert_spaces_instead_of_tabs(True)
+        self.source_view.set_auto_indent(True)
+        
+        scrolled.set_child(self.source_view)
+        self.append(scrolled)
+        
+        self.text_changed_callback = None
+        self.source_buffer.connect("changed", self.on_text_changed)
+    
+    def set_content(self, content: str):
+        """Establecer contenido CSS"""
+        self.source_buffer.set_text(content)
+    
+    def get_content(self) -> str:
+        """Obtener contenido CSS"""
+        start = self.source_buffer.get_start_iter()
+        end = self.source_buffer.get_end_iter()
+        return self.source_buffer.get_text(start, end, False)
+    
+    def on_text_changed(self, buffer):
+        """Manejar cambios de texto"""
+        if self.text_changed_callback:
+            content = self.get_content()
+            self.text_changed_callback(content)
+    
+    def set_text_changed_callback(self, callback):
+        """Establecer callback para cambios de texto"""
+        self.text_changed_callback = callback
+    
+    def show_color_picker(self, button):
+        """Mostrar selector de color"""
+        print("Color picker - TODO")
+    
+    def validate_css(self, button):
+        """Validar CSS"""
+        print("CSS validation - TODO")
+
+class ImageViewer(Gtk.Box):
+    """Visor de imágenes con información"""
+    
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.set_halign(Gtk.Align.CENTER)
+        self.set_valign(Gtk.Align.CENTER)
+        
+        # Image display
+        self.image_display = Gtk.Picture()
+        self.image_display.set_can_shrink(True)
+        self.image_display.set_content_fit(Gtk.ContentFit.CONTAIN)
+        
+        # Image info
+        self.image_info = Gtk.Label()
+        self.image_info.add_css_class("subtitle")
+        self.image_info.set_justify(Gtk.Justification.CENTER)
+        
+        # Action buttons
+        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        button_box.set_halign(Gtk.Align.CENTER)
+        
+        replace_btn = Gtk.Button.new_with_label("Replace Image")
+        replace_btn.connect("clicked", self.replace_image)
+        
+        metadata_btn = Gtk.Button.new_with_label("View Metadata")
+        metadata_btn.connect("clicked", self.show_metadata)
+        
+        button_box.append(replace_btn)
+        button_box.append(metadata_btn)
+        
+        self.append(self.image_display)
+        self.append(self.image_info)
+        self.append(button_box)
+        
+        self.current_item = None
+    
+    def set_image(self, item, temp_path: str):
+        """Establecer imagen a mostrar"""
+        self.current_item = item
+        
+        try:
+            # Load image
+            file = Gio.File.new_for_path(temp_path)
+            self.image_display.set_file(file)
+            
+            # Update info
+            size = len(item.get_content())
+            size_str = self.format_file_size(size)
+            
+            # Try to get image dimensions
+            try:
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file(temp_path)
+                width = pixbuf.get_width()
+                height = pixbuf.get_height()
+                dimensions = f"{width}×{height}"
+            except:
+                dimensions = "Unknown dimensions"
+            
+            info_text = f"{item.get_name()}\n{size_str} • {dimensions}"
+            self.image_info.set_text(info_text)
+            
+        except Exception as e:
+            self.image_info.set_text(f"Error loading {item.get_name()}\n{str(e)}")
+    
+    def format_file_size(self, size: int) -> str:
+        """Formatear tamaño de archivo"""
+        if size < 1024:
+            return f"{size} bytes"
+        elif size < 1024 * 1024:
+            return f"{size/1024:.1f} KB"
+        else:
+            return f"{size/(1024*1024):.1f} MB"
+    
+    def replace_image(self, button):
+        """Reemplazar imagen"""
+        print("Replace image - TODO")
+    
+    def show_metadata(self, button):
+        """Mostrar metadatos de imagen"""
+        print("Show metadata - TODO")
+
+class PreviewPanel(Gtk.Box):
+    """Panel de previsualización WebKit"""
+    
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.set_size_request(400, -1)
+        
+        # Header
+        header = Adw.HeaderBar()
+        header.set_title_widget(Gtk.Label(label="Preview"))
+        header.add_css_class("flat")
+        
+        # Fullscreen button
+        fullscreen_btn = Gtk.Button.new_from_icon_name("view-fullscreen-symbolic")
+        fullscreen_btn.set_tooltip_text("Open Preview in New Window")
+        fullscreen_btn.connect("clicked", self.open_fullscreen)
+        header.pack_end(fullscreen_btn)
+        
+        # Refresh button
+        refresh_btn = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
+        refresh_btn.set_tooltip_text("Refresh Preview")
+        refresh_btn.connect("clicked", self.refresh_preview)
+        header.pack_end(refresh_btn)
+        
+        self.append(header)
+        
+        # WebKit view
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_vexpand(True)
+        
+        self.webview = WebKit.WebView()
+        self.webview.set_vexpand(True)
+        
+        # Configure WebKit settings
+        settings = self.webview.get_settings()
+        settings.set_enable_developer_extras(True)
+        settings.set_enable_write_console_messages_to_stdout(True)
+        
+        scrolled.set_child(self.webview)
+        self.append(scrolled)
+        
+        self.current_content = ""
+        self.current_type = ""
+        
+    def update_preview(self, content: str, content_type: str = "html"):
+        """Actualizar previsualización"""
+        self.current_content = content
+        self.current_type = content_type
+        
+        if content_type == "html":
+            self._preview_html(content)
+        elif content_type == "css":
+            self._preview_css(content)
+        elif content_type == "image":
+            self._preview_image(content)
+        else:
+            self._preview_text(content)
+    
+    def _preview_html(self, content: str):
+        """Previsualizar contenido HTML"""
+        # Create complete HTML document
+        full_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body {{ 
+                    font-family: serif; 
+                    line-height: 1.6; 
+                    margin: 20px; 
+                    background: white;
+                    color: #333;
+                }}
+                h1, h2, h3, h4, h5, h6 {{ 
+                    color: #2a2a2a; 
+                    margin-top: 1.5em;
+                    margin-bottom: 0.5em;
+                }}
+                p {{ margin-bottom: 1em; }}
+                img {{ max-width: 100%; height: auto; }}
+                blockquote {{
+                    margin: 1em 0;
+                    padding: 0.5em 1em;
+                    border-left: 4px solid #ddd;
+                    background: #f9f9f9;
+                }}
+                code {{
+                    background: #f5f5f5;
+                    padding: 0.2em 0.4em;
+                    border-radius: 3px;
+                    font-family: monospace;
+                }}
+                pre {{
+                    background: #f5f5f5;
+                    padding: 1em;
+                    border-radius: 6px;
+                    overflow-x: auto;
+                }}
+            </style>
+        </head>
+        <body>
+            {content}
+        </body>
+        </html>
+        """
+        self.webview.load_html(full_html, "file:///")
+    
+    def _preview_css(self, content: str):
+        """Previsualizar CSS con muestra de estilos"""
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{
+                    font-family: sans-serif;
+                    padding: 20px;
+                    background: #f6f5f4;
+                }}
+                .css-preview {{
+                    background: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                }}
+                {content}
+            </style>
+        </head>
+        <body>
+            <div class="css-preview">
+                <h1>CSS Preview</h1>
+                <h2>Sample Heading 2</h2>
+                <h3>Sample Heading 3</h3>
+                <p>This is a sample paragraph to demonstrate the CSS styles. Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+                <blockquote>This is a sample blockquote element.</blockquote>
+                <ul>
+                    <li>Sample list item 1</li>
+                    <li>Sample list item 2</li>
+                    <li>Sample list item 3</li>
+                </ul>
+            </div>
+        </body>
+        </html>
+        """
+        self.webview.load_html(html, "file:///")
+    
+    def _preview_image(self, image_path: str):
+        """Previsualizar imagen"""
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{
+                    margin: 0;
+                    padding: 20px;
+                    text-align: center;
+                    background: #f6f5f4;
+                    font-family: sans-serif;
+                }}
+                img {{
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                }}
+                .info {{
+                    margin-top: 16px;
+                    color: #666;
+                }}
+            </style>
+        </head>
+        <body>
+            <img src="file://{image_path}" alt="Preview">
+            <div class="info">Image Preview</div>
+        </body>
+        </html>
+        """
+        self.webview.load_html(html, f"file://{os.path.dirname(image_path)}/")
+    
+    def _preview_text(self, content: str):
+        """Previsualizar texto plano"""
+        escaped_content = html.escape(content)
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{
+                    font-family: monospace;
+                    padding: 20px;
+                    background: #f6f5f4;
+                    margin: 0;
+                }}
+                .content {{
+                    background: white;
+                    padding: 20px;
+                    border-radius: 8px;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="content">{escaped_content}</div>
+        </body>
+        </html>
+        """
+        self.webview.load_html(html_content, "file:///")
+    
+    def refresh_preview(self, button):
+        """Refrescar previsualización"""
+        if self.current_content:
+            self.update_preview(self.current_content, self.current_type)
+    
+    def open_fullscreen(self, button=None):
+        """Abrir previsualización en ventana completa"""
+        fullscreen_window = PreviewWindow(self.get_root())
+        fullscreen_window.set_content(self.current_content, self.current_type)
+        fullscreen_window.show()
+
+class PreviewWindow(Adw.Window):
+    """Ventana de previsualización en pantalla completa"""
+    
+    def __init__(self, parent):
+        super().__init__()
+        self.set_transient_for(parent)
+        self.set_title("Preview - Fullscreen")
+        self.set_default_size(800, 600)
+        
+        # Header bar
+        header = Adw.HeaderBar()
+        close_btn = Gtk.Button.new_with_label("Close")
+        close_btn.connect("clicked", lambda x: self.close())
+        header.pack_start(close_btn)
+        
+        fullscreen_btn = Gtk.Button.new_from_icon_name("view-fullscreen-symbolic")
+        fullscreen_btn.set_tooltip_text("Toggle Fullscreen")
+        fullscreen_btn.connect("clicked", self.toggle_fullscreen)
+        header.pack_end(fullscreen_btn)
+        
+        self.set_titlebar(header)
+        
+        # WebKit view
+        self.webview = WebKit.WebView()
+        settings = self.webview.get_settings()
+        settings.set_enable_developer_extras(True)
+        
+        self.set_content_widget = self.webview
+        self.set_child(self.webview)
+        
+        self.is_fullscreen = False
+    
+    def set_content(self, content: str, content_type: str):
+        """Establecer contenido a mostrar"""
+        preview_panel = PreviewPanel()
+        preview_panel.webview = self.webview  # Usar nuestro webview
+        preview_panel.update_preview(content, content_type)
+    
+    def toggle_fullscreen(self, button):
+        """Alternar pantalla completa"""
+        if self.is_fullscreen:
+            self.unfullscreen()
+        else:
+            self.fullscreen()
+        self.is_fullscreen = not self.is_fullscreen
+
+class GutenAIWindow(Adw.ApplicationWindow):
+    """Ventana principal de Guten.AI"""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+        # Initialize managers
+        self.epub_manager = EPUBResourceManager()
+        self.temp_dir = None
+        
+        # UI state
+        self.current_resource = None
+        self.current_editor_mode = "text"
+        self.left_sidebar_visible = True
+        self.right_sidebar_visible = True
+        
+        # Setup UI
+        self.setup_window()
+        self.setup_headerbar()
+        self.setup_content_area()
+        self.setup_styling()
+        self.setup_shortcuts()
+        
+    def setup_window(self):
+        """Configurar ventana principal"""
+        self.set_title("Guten.AI - EPUB Editor")
+        self.set_default_size(1400, 900)
+        self.set_icon_name("text-editor")
+        
+    def setup_headerbar(self):
+        """Crear headerbar con identidad dual y controles"""
+        self.headerbar = Adw.HeaderBar()
+        
+        # Left sidebar toggle
+        self.left_toggle = Gtk.Button.new_from_icon_name("view-sidebar-start-symbolic")
+        self.left_toggle.set_tooltip_text("Toggle EPUB Structure (Ctrl+1)")
+        self.left_toggle.connect("clicked", self.toggle_left_sidebar)
+        self.headerbar.pack_start(self.left_toggle)
+        
+        # Title block (dual identity)
+        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        title_box.set_valign(Gtk.Align.CENTER)
+        
+        self.book_title = Gtk.Label(label="No book loaded")
+        self.book_title.add_css_class("title")
+        self.book_title.set_ellipsize(Pango.EllipsizeMode.END)
+        
+        self.resource_label = Gtk.Label(label="Select a resource")
+        self.resource_label.add_css_class("subtitle")
+        self.resource_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+        
+        title_box.append(self.book_title)
+        title_box.append(self.resource_label)
+        
+        self.headerbar.set_title_widget(title_box)
+        
+        # Right side controls
+        controls_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        
+        # Search button
+        search_btn = Gtk.Button.new_from_icon_name("system-search-symbolic")
+        search_btn.set_tooltip_text("Global Search (Ctrl+F)")
+        search_btn.connect("clicked", self.show_search)
+        controls_box.append(search_btn)
+        
+        # AI Assistant button
+        ai_btn = Gtk.Button.new_from_icon_name("stars-symbolic")
+        ai_btn.set_tooltip_text("AI Assistant")
+        ai_btn.connect("clicked", self.show_ai_assistant)
+        controls_box.append(ai_btn)
+        
+        # Command palette
+        cmd_btn = Gtk.Button.new_from_icon_name("preferences-desktop-keyboard-symbolic")
+        cmd_btn.set_tooltip_text("Command Palette (Ctrl+Shift+P)")
+        cmd_btn.connect("clicked", self.show_command_palette)
+        controls_box.append(cmd_btn)
+        
+        # Recent files
+        recent_btn = Gtk.Button.new_from_icon_name("document-open-recent-symbolic")
+        recent_btn.set_tooltip_text("Recent Books")
+        recent_btn.connect("clicked", self.show_recent_files)
+        controls_box.append(recent_btn)
+        
+        # Main menu
+        menu_btn = Gtk.Button.new_from_icon_name("open-menu-symbolic")
+        menu_btn.set_tooltip_text("Main Menu")
+        menu_btn.connect("clicked", self.show_main_menu)
+        controls_box.append(menu_btn)
+        
+        self.headerbar.pack_end(controls_box)
+        
+        # Right sidebar toggle
+        self.right_toggle = Gtk.Button.new_from_icon_name("view-sidebar-end-symbolic")
+        self.right_toggle.set_tooltip_text("Toggle Preview (Ctrl+2)")
+        self.right_toggle.connect("clicked", self.toggle_right_sidebar)
+        self.headerbar.pack_end(self.right_toggle)
+        
+        # For AdwApplicationWindow, we need to set the titlebar differently
+        # Create a toolbar view to contain the headerbar
+        self.toolbar_view = Adw.ToolbarView()
+        self.toolbar_view.add_top_bar(self.headerbar)
+    
+    def setup_content_area(self):
+        """Crear área de contenido con tres paneles"""
+        # Setup panels first
+        self.setup_center_panel()
+        self.setup_right_panel()
+        
+        # Main paned (center + right)
+        self.main_paned = Gtk.Paned.new(Gtk.Orientation.HORIZONTAL)
+        
+        # Add children to paned widget (compatible method)
+        self.main_paned.set_start_child(self.center_panel)
+        self.main_paned.set_end_child(self.right_panel)
+        
+        # Set properties using compatible methods
+        try:
+            # Try newer GTK4 methods first
+            self.main_paned.set_start_child_shrink(False)
+            self.main_paned.set_end_child_shrink(False)
+            self.main_paned.set_resize_start_child(True)
+            self.main_paned.set_resize_end_child(False)
+        except AttributeError:
+            # Fallback for older GTK4 versions
+            self.main_paned.set_shrink_start_child(False)
+            self.main_paned.set_shrink_end_child(False)
+            self.main_paned.set_resize_start_child(True)
+            self.main_paned.set_resize_end_child(False)
+        
+        self.main_paned.set_position(900)  # Default split position
+        
+        # Main overlay container
+        self.overlay = Gtk.Overlay.new()
+        self.overlay.set_child(self.main_paned)
+        
+        # Left sidebar as overlay
+        self.setup_left_sidebar_overlay()
+        
+        # Set the content to the toolbar view instead of overlay directly
+        self.toolbar_view.set_content(self.overlay)
+        self.set_content(self.toolbar_view)
+        
+    def setup_left_sidebar_overlay(self):
+        """Configurar sidebar izquierdo como overlay"""
+        self.left_sidebar = EPUBSidebar(self.epub_manager, self.on_resource_selected)
+        self.left_sidebar.set_halign(Gtk.Align.START)
+        self.left_sidebar.set_valign(Gtk.Align.FILL)
+        self.overlay.add_overlay(self.left_sidebar)
+        
+    def setup_center_panel(self):
+        """Crear panel central con diferentes editores"""
+        self.center_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        
+        # Editor toolbar
+        editor_toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        editor_toolbar.add_css_class("toolbar")
+        editor_toolbar.set_margin_start(12)
+        editor_toolbar.set_margin_end(12)
+        editor_toolbar.set_margin_top(6)
+        editor_toolbar.set_margin_bottom(6)
+        
+        # File operations
+        open_btn = Gtk.Button.new_from_icon_name("document-open-symbolic")
+        open_btn.set_tooltip_text("Open EPUB (Ctrl+O)")
+        open_btn.connect("clicked", self.open_epub_dialog)
+        editor_toolbar.append(open_btn)
+        
+        save_btn = Gtk.Button.new_from_icon_name("document-save-symbolic")
+        save_btn.set_tooltip_text("Save (Ctrl+S)")
+        save_btn.connect("clicked", self.save_current_resource)
+        editor_toolbar.append(save_btn)
+        
+        # Export button
+        export_btn = Gtk.Button.new_from_icon_name("document-save-as-symbolic")
+        export_btn.set_tooltip_text("Export EPUB (Ctrl+E)")
+        export_btn.connect("clicked", self.export_epub)
+        editor_toolbar.append(export_btn)
+        
+        # Add separator
+        separator = Gtk.Separator.new(Gtk.Orientation.VERTICAL)
+        editor_toolbar.append(separator)
+        
+        # Mode indicator
+        self.mode_label = Gtk.Label(label="Welcome")
+        self.mode_label.add_css_class("heading")
+        self.mode_label.set_margin_start(12)
+        editor_toolbar.append(self.mode_label)
+        
+        self.center_panel.append(editor_toolbar)
+        
+        # Editor stack
+        self.editor_stack = Gtk.Stack()
+        self.editor_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+        self.editor_stack.set_transition_duration(200)
+        
+        # Create different editors
+        self.text_editor = TextEditor()
+        self.text_editor.set_text_changed_callback(self.on_text_content_changed)
+        
+        self.css_editor = CSSEditor()
+        self.css_editor.set_text_changed_callback(self.on_css_content_changed)
+        
+        self.image_viewer = ImageViewer()
+        
+        # Add to stack
+        self.editor_stack.add_named(self.text_editor, "text")
+        self.editor_stack.add_named(self.css_editor, "css")
+        self.editor_stack.add_named(self.image_viewer, "image")
+        
+        # Default welcome screen
+        welcome_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=24)
+        welcome_box.set_halign(Gtk.Align.CENTER)
+        welcome_box.set_valign(Gtk.Align.CENTER)
+        welcome_box.set_margin_start(50)
+        welcome_box.set_margin_end(50)
+        welcome_box.set_margin_top(50)
+        welcome_box.set_margin_bottom(50)
+        
+        welcome_icon = Gtk.Image.new_from_icon_name("text-editor")
+        welcome_icon.set_pixel_size(64)
+        welcome_icon.add_css_class("dim-label")
+        
+        welcome_title = Gtk.Label(label="Welcome to Guten.AI")
+        welcome_title.add_css_class("title-1")
+        
+        welcome_subtitle = Gtk.Label(label="Open an EPUB file to start editing")
+        welcome_subtitle.add_css_class("subtitle")
+        welcome_subtitle.add_css_class("dim-label")
+        
+        open_button = Gtk.Button.new_with_label("Open EPUB File")
+        open_button.add_css_class("suggested-action")
+        open_button.add_css_class("pill")
+        open_button.connect("clicked", self.open_epub_dialog)
+        
+        welcome_box.append(welcome_icon)
+        welcome_box.append(welcome_title)
+        welcome_box.append(welcome_subtitle)
+        welcome_box.append(open_button)
+        
+        self.editor_stack.add_named(welcome_box, "welcome")
+        self.editor_stack.set_visible_child_name("welcome")
+        
+        self.center_panel.append(self.editor_stack)
+        
+    def setup_right_panel(self):
+        """Configurar panel de previsualización"""
+        self.right_panel = PreviewPanel()
+        
+    def setup_styling(self):
+        """Aplicar estilos CSS personalizados"""
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(b"""
+        .sidebar {
+            background-color: @sidebar_bg_color;
+            border-right: 1px solid @borders;
+        }
+        
+        .toolbar {
+            padding: 6px;
+            background-color: @headerbar_bg_color;
+            border-bottom: 1px solid @borders;
+        }
+        
+        .editor-area {
+            background-color: @view_bg_color;
+        }
+        
+        .preview-area {
+            background-color: @view_bg_color;
+            border-left: 1px solid @borders;
+        }
+        
+        .welcome-button {
+            padding: 12px 24px;
+        }
+        """)
+        
+        Gtk.StyleContext.add_provider_for_display(
+            self.get_display(),
+            css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+    
+    def setup_shortcuts(self):
+        """Configurar atajos de teclado"""
+        # Create shortcut controller
+        shortcut_controller = Gtk.ShortcutController()
+        self.add_controller(shortcut_controller)
+        
+        # Define shortcuts
+        shortcuts = [
+            ("app.open", ["<Control>o"]),
+            ("app.save", ["<Control>s"]),
+            ("app.search", ["<Control>f"]),
+            ("app.command_palette", ["<Control><Shift>p"]),
+            ("app.toggle_left", ["<Control>1"]),
+            ("app.toggle_right", ["<Control>2"]),
+            ("app.export", ["<Control>e"]),
+            ("app.preview_fullscreen", ["F11"]),
+        ]
+        
+        # Add shortcuts
+        for action_name, accelerators in shortcuts:
+            trigger = Gtk.ShortcutTrigger.parse_string(accelerators[0])
+            action = Gtk.NamedAction.new(action_name)
+            shortcut = Gtk.Shortcut.new(trigger, action)
+            shortcut_controller.add_shortcut(shortcut)
+        
+        # Create actions
+        self.create_actions()
+    
+    def create_actions(self):
+        """Crear acciones de la aplicación"""
+        actions = [
+            ("open", self.open_epub_dialog),
+            ("save", self.save_current_resource),
+            ("search", self.show_search),
+            ("command_palette", self.show_command_palette),
+            ("toggle_left", self.toggle_left_sidebar),
+            ("toggle_right", self.toggle_right_sidebar),
+            ("export", self.export_epub),
+            ("preview_fullscreen", self.open_preview_fullscreen),
+        ]
+        
+        for action_name, callback in actions:
+            action = Gio.SimpleAction.new(action_name, None)
+            action.connect("activate", callback)
+            self.add_action(action)
+    
+    def on_resource_selected(self, item, item_type):
+        """Manejar selección de recurso"""
+        self.current_resource = item
+        self.resource_label.set_text(item.get_name())
+        
+        # Switch to appropriate editor
+        if item_type == "html":
+            self.switch_to_text_editor(item)
+        elif item_type == "css":
+            self.switch_to_css_editor(item)
+        elif item_type == "image":
+            self.switch_to_image_viewer(item)
+        else:
+            # Default to text editor for other types
+            self.switch_to_text_editor(item)
+    
+    def switch_to_text_editor(self, item):
+        """Cambiar al editor de texto"""
+        self.current_editor_mode = "text"
+        self.editor_stack.set_visible_child_name("text")
+        self.mode_label.set_text("HTML Editor")
+        
+        try:
+            content = item.get_content().decode('utf-8')
+            self.text_editor.set_content(content)
+            self.right_panel.update_preview(content, "html")
+        except Exception as e:
+            print(f"Error loading text content: {e}")
+    
+    def switch_to_css_editor(self, item):
+        """Cambiar al editor CSS"""
+        self.current_editor_mode = "css"
+        self.editor_stack.set_visible_child_name("css")
+        self.mode_label.set_text("CSS Editor")
+        
+        try:
+            content = item.get_content().decode('utf-8')
+            self.css_editor.set_content(content)
+            self.right_panel.update_preview(content, "css")
+        except Exception as e:
+            print(f"Error loading CSS content: {e}")
+    
+    def switch_to_image_viewer(self, item):
+        """Cambiar al visor de imágenes"""
+        self.current_editor_mode = "image"
+        self.editor_stack.set_visible_child_name("image")
+        self.mode_label.set_text("Image Viewer")
+        
+        try:
+            # Create temporary file
+            if self.temp_dir is None:
+                self.temp_dir = tempfile.mkdtemp()
+            
+            temp_path = os.path.join(self.temp_dir, item.get_name())
+            with open(temp_path, 'wb') as f:
+                f.write(item.get_content())
+            
+            self.image_viewer.set_image(item, temp_path)
+            self.right_panel.update_preview(temp_path, "image")
+            
+        except Exception as e:
+            print(f"Error loading image: {e}")
+    
+    def on_text_content_changed(self, content):
+        """Manejar cambios en el editor de texto"""
+        if self.current_editor_mode == "text":
+            self.right_panel.update_preview(content, "html")
+    
+    def on_css_content_changed(self, content):
+        """Manejar cambios en el editor CSS"""
+        if self.current_editor_mode == "css":
+            self.right_panel.update_preview(content, "css")
+    
+    def toggle_left_sidebar(self, action=None, param=None):
+        """Alternar visibilidad del sidebar izquierdo"""
+        self.left_sidebar_visible = not self.left_sidebar_visible
+        self.left_sidebar.set_visible(self.left_sidebar_visible)
+    
+    def toggle_right_sidebar(self, action=None, param=None):
+        """Alternar visibilidad del sidebar derecho"""
+        self.right_sidebar_visible = not self.right_sidebar_visible
+        self.right_panel.set_visible(self.right_sidebar_visible)
+    
+    def open_epub_dialog(self, action=None, param=None):
+        """Abrir diálogo para seleccionar EPUB"""
+        dialog = Gtk.FileChooserDialog(
+            title="Open EPUB File",
+            parent=self,
+            action=Gtk.FileChooserAction.OPEN
+        )
+        dialog.add_buttons(
+            "_Cancel", Gtk.ResponseType.CANCEL,
+            "_Open", Gtk.ResponseType.ACCEPT
+        )
+        
+        # Add EPUB filter
+        filter_epub = Gtk.FileFilter()
+        filter_epub.set_name("EPUB files")
+        filter_epub.add_pattern("*.epub")
+        dialog.add_filter(filter_epub)
+        
+        # All files filter
+        filter_all = Gtk.FileFilter()
+        filter_all.set_name("All files")
+        filter_all.add_pattern("*")
+        dialog.add_filter(filter_all)
+        
+        dialog.connect("response", self.on_open_epub_response)
+        dialog.show()
+    
+    def on_open_epub_response(self, dialog, response):
+        """Manejar respuesta del diálogo de apertura"""
+        if response == Gtk.ResponseType.ACCEPT:
+            file = dialog.get_file()
+            path = file.get_path()
+            self.load_epub(path)
+        dialog.destroy()
+    
+    def load_epub(self, path: str):
+        """Cargar archivo EPUB"""
+        if self.epub_manager.load_epub(path):
+            filename = os.path.basename(path)
+            self.book_title.set_text(filename)
+            self.left_sidebar.load_structure()
+            
+            # Switch to text editor if we have text resources
+            if self.epub_manager.resources['text']:
+                first_text = self.epub_manager.resources['text'][0]
+                self.on_resource_selected(first_text['item'], first_text['type'])
+            else:
+                self.editor_stack.set_visible_child_name("welcome")
+        else:
+            # Show error dialog
+            self.show_error_dialog("Failed to load EPUB", "The selected file could not be opened as an EPUB.")
+    
+    def save_current_resource(self, action=None, param=None):
+        """Guardar recurso actual"""
+        if not self.current_resource:
+            return
+        
+        try:
+            content = ""
+            
+            if self.current_editor_mode == "text":
+                content = self.text_editor.get_content()
+            elif self.current_editor_mode == "css":
+                content = self.css_editor.get_content()
+            else:
+                print("Cannot save this resource type")
+                return
+            
+            # Update the ebooklib item
+            self.current_resource.set_content(content.encode('utf-8'))
+            print(f"Saved {self.current_resource.get_name()}")
+            
+            # Show success message
+            toast = Adw.Toast.new("File saved successfully")
+            toast.set_timeout(2)
+            
+            # Add toast to window if it has a toast overlay
+            if hasattr(self, 'toast_overlay'):
+                self.toast_overlay.add_toast(toast)
+            
+        except Exception as e:
+            self.show_error_dialog("Save Error", f"Failed to save file: {str(e)}")
+    
+    def export_epub(self, action=None, param=None):
+        """Exportar EPUB actual"""
+        if not self.epub_manager.book:
+            self.show_error_dialog("No Book Loaded", "Please load an EPUB file first.")
+            return
+        
+        dialog = Gtk.FileChooserDialog(
+            title="Export EPUB As...",
+            parent=self,
+            action=Gtk.FileChooserAction.SAVE
+        )
+        dialog.add_buttons(
+            "_Cancel", Gtk.ResponseType.CANCEL,
+            "_Save", Gtk.ResponseType.ACCEPT
+        )
+        
+        # Set default filename
+        dialog.set_current_name("exported_book.epub")
+        
+        # Add EPUB filter
+        filter_epub = Gtk.FileFilter()
+        filter_epub.set_name("EPUB files")
+        filter_epub.add_pattern("*.epub")
+        dialog.add_filter(filter_epub)
+        
+        dialog.connect("response", self.on_export_epub_response)
+        dialog.show()
+    
+    def on_export_epub_response(self, dialog, response):
+        """Manejar respuesta del diálogo de exportación"""
+        if response == Gtk.ResponseType.ACCEPT:
+            file = dialog.get_file()
+            path = file.get_path()
+            
+            # Ensure .epub extension
+            if not path.endswith('.epub'):
+                path += '.epub'
+            
+            try:
+                epub.write_epub(path, self.epub_manager.book)
+                print(f"EPUB exported to: {path}")
+                
+                # Show success message
+                toast = Adw.Toast.new(f"EPUB exported successfully")
+                toast.set_timeout(3)
+                
+            except Exception as e:
+                self.show_error_dialog("Export Error", f"Failed to export EPUB: {str(e)}")
+        
+        dialog.destroy()
+    
+    def show_search(self, action=None, param=None):
+        """Mostrar diálogo de búsqueda global"""
+        if not self.epub_manager.book:
+            self.show_error_dialog("No Book Loaded", "Please load an EPUB file first.")
+            return
+        
+        search_dialog = SearchDialog(self, self.epub_manager)
+        search_dialog.show()
+    
+    def show_command_palette(self, action=None, param=None):
+        """Mostrar command palette"""
+        command_palette = CommandPalette(self)
+        command_palette.show()
+    
+    def show_ai_assistant(self, action=None, param=None):
+        """Mostrar asistente de IA"""
+        # Placeholder for AI assistant
+        dialog = Adw.MessageDialog.new(
+            self,
+            "AI Assistant",
+            "AI functionality coming soon!\n\nThis will include:\n• Content suggestions\n• Grammar checking\n• Style improvements\n• Automatic formatting"
+        )
+        dialog.add_response("ok", "OK")
+        dialog.show()
+    
+    def show_recent_files(self, action=None, param=None):
+        """Mostrar archivos recientes"""
+        # Placeholder for recent files
+        dialog = Adw.MessageDialog.new(
+            self,
+            "Recent Files",
+            "Recent files functionality coming soon!\n\nThis will show your last 5 opened EPUB files."
+        )
+        dialog.add_response("ok", "OK")
+        dialog.show()
+    
+    def show_main_menu(self, action=None, param=None):
+        """Mostrar menú principal"""
+        # Create popover menu
+        menu_model = Gio.Menu()
+        
+        # File section
+        file_section = Gio.Menu()
+        file_section.append("Open EPUB", "app.open")
+        file_section.append("Save", "app.save")
+        file_section.append("Export EPUB", "app.export")
+        menu_model.append_section("File", file_section)
+        
+        # View section
+        view_section = Gio.Menu()
+        view_section.append("Toggle Left Sidebar", "app.toggle_left")
+        view_section.append("Toggle Right Sidebar", "app.toggle_right")
+        view_section.append("Fullscreen Preview", "app.preview_fullscreen")
+        menu_model.append_section("View", view_section)
+        
+        # Tools section
+        tools_section = Gio.Menu()
+        tools_section.append("Global Search", "app.search")
+        tools_section.append("Command Palette", "app.command_palette")
+        tools_section.append("Validate EPUB", "app.validate")
+        menu_model.append_section("Tools", tools_section)
+        
+        # Help section
+        help_section = Gio.Menu()
+        help_section.append("About Guten.AI", "app.about")
+        help_section.append("Keyboard Shortcuts", "app.shortcuts")
+        menu_model.append_section("Help", help_section)
+        
+        # Create and show popover
+        popover = Gtk.PopoverMenu.new_from_model(menu_model)
+        popover.set_parent(self.headerbar)
+        popover.popup()
+        
+        # Add missing actions
+        self.add_missing_actions()
+    
+    def add_missing_actions(self):
+        """Agregar acciones faltantes"""
+        missing_actions = [
+            ("validate", self.validate_epub),
+            ("about", self.show_about),
+            ("shortcuts", self.show_shortcuts),
+        ]
+        
+        for action_name, callback in missing_actions:
+            if not self.lookup_action(action_name):
+                action = Gio.SimpleAction.new(action_name, None)
+                action.connect("activate", callback)
+                self.add_action(action)
+    
+    def validate_epub(self, action=None, param=None):
+        """Validar EPUB actual"""
+        if not self.epub_manager.book:
+            self.show_error_dialog("No Book Loaded", "Please load an EPUB file first.")
+            return
+        
+        # Placeholder for EPUB validation
+        dialog = Adw.MessageDialog.new(
+            self,
+            "EPUB Validation",
+            "EPUB validation functionality coming soon!\n\nThis will check for:\n• Structure validity\n• Missing files\n• Broken links\n• Metadata completeness"
+        )
+        dialog.add_response("ok", "OK")
+        dialog.show()
+    
+    def show_about(self, action=None, param=None):
+        """Mostrar diálogo Acerca de"""
+        about = Adw.AboutWindow.new()
+        about.set_transient_for(self)
+        about.set_application_name("Guten.AI")
+        about.set_application_icon("text-editor")
+        about.set_version("1.0.0")
+        about.set_developer_name("Guten.AI Team")
+        about.set_license_type(Gtk.License.GPL_3_0)
+        about.set_comments("Modern EPUB editor built with GTK4 and libadwaita")
+        about.set_website("https://github.com/gutenai/editor")
+        about.set_issue_url("https://github.com/gutenai/editor/issues")
+        about.add_credit_section("Libraries", [
+            "GTK4 - User interface toolkit",
+            "libadwaita - GNOME design patterns",
+            "ebooklib - EPUB processing",
+            "GtkSourceView - Source code editing"
+        ])
+        about.show()
+    
+    def show_shortcuts(self, action=None, param=None):
+        """Mostrar atajos de teclado"""
+        shortcuts_window = Gtk.ShortcutsWindow.new()
+        shortcuts_window.set_transient_for(self)
+        
+        # Create shortcuts section
+        section = Gtk.ShortcutsSection.new()
+        section.set_title("Keyboard Shortcuts")
+        
+        # File shortcuts group
+        file_group = Gtk.ShortcutsGroup.new()
+        file_group.set_title("File Operations")
+        
+        shortcuts_data = [
+            ("Ctrl+O", "Open EPUB file"),
+            ("Ctrl+S", "Save current resource"),
+            ("Ctrl+E", "Export EPUB"),
+            ("Ctrl+F", "Global search"),
+            ("Ctrl+Shift+P", "Command palette"),
+            ("Ctrl+1", "Toggle left sidebar"),
+            ("Ctrl+2", "Toggle right sidebar"),
+            ("F11", "Fullscreen preview"),
+        ]
+        
+        for accelerator, description in shortcuts_data:
+            shortcut = Gtk.ShortcutsShortcut.new()
+            shortcut.set_accelerator(accelerator)
+            shortcut.set_title(description)
+            file_group.add_shortcut(shortcut)
+        
+        section.add_group(file_group)
+        shortcuts_window.add_section(section)
+        shortcuts_window.show()
+    
+    def open_preview_fullscreen(self, action=None, param=None):
+        """Abrir previsualización en pantalla completa"""
+        self.right_panel.open_fullscreen()
+    
+    def show_error_dialog(self, title: str, message: str):
+        """Mostrar diálogo de error"""
+        dialog = Adw.MessageDialog.new(self, title, message)
+        dialog.add_response("ok", "OK")
+        dialog.set_response_appearance("ok", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.show()
+    
+    def __del__(self):
+        """Limpiar archivos temporales"""
+        if self.temp_dir and os.path.exists(self.temp_dir):
+            import shutil
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+class GutenAIApplication(Adw.Application):
+    """Aplicación principal de Guten.AI"""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.set_application_id("com.gutenai.editor")
+        self.set_flags(Gio.ApplicationFlags.HANDLES_OPEN)
+        
+    def do_activate(self):
+        """Activar aplicación"""
+        win = self.props.active_window
+        if not win:
+            win = GutenAIWindow(application=self)
+        win.present()
+    
+    def do_open(self, files, n_files, hint):
+        """Abrir archivos desde línea de comandos"""
+        self.activate()
+        win = self.props.active_window
+        
+        if win and n_files > 0:
+            file_path = files[0].get_path()
+            if file_path.endswith('.epub'):
+                win.load_epub(file_path)
+
+def main():
+    """Punto de entrada principal"""
+    import sys
+    
+    # Check if required modules are available
+    try:
+        import gi
+        # Try different GTK4 versions for compatibility
+        try:
+            gi.require_version('Gtk', '4.0')
+        except ValueError:
+            print("Error: GTK4 not found. Please install GTK4.")
+            sys.exit(1)
+            
+        try:
+            gi.require_version('Adw', '1')
+        except ValueError:
+            print("Warning: libadwaita not found. Some features may not work correctly.")
+            
+        try:
+            gi.require_version('WebKit', '6.0')
+        except ValueError:
+            try:
+                gi.require_version('WebKit2', '4.1')
+                print("Info: Using WebKit2 4.1 (older version)")
+            except ValueError:
+                print("Warning: WebKit not found. Preview functionality will be limited.")
+        
+        # GtkSourceView is optional
+        try:
+            gi.require_version('GtkSource', '5')
+        except ValueError:
+            try:
+                gi.require_version('GtkSource', '4')
+                print("Info: Using GtkSourceView 4 (older version)")
+            except ValueError:
+                print("Warning: GtkSourceView not found. Syntax highlighting will be limited.")
+                
+    except ImportError as e:
+        print(f"Error: Required GTK modules not found: {e}")
+        print("Please install the required system packages:")
+        print("  Ubuntu/Debian: sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 gir1.2-webkit2-4.1")
+        print("  Fedora: sudo dnf install python3-gobject gtk4-devel libadwaita-devel webkit2gtk4.1-devel")
+        sys.exit(1)
+    
+    try:
+        import ebooklib
+    except ImportError:
+        print("Error: ebooklib not found.")
+        print("Install with: pip install ebooklib")
+        sys.exit(1)
+    
+    # Try to start the application
+    try:
+        app = GutenAIApplication()
+        return app.run(sys.argv)
+    except Exception as e:
+        print(f"Error starting application: {e}")
+        print("This might be due to missing system libraries or an incompatible GTK version.")
+        print("Please ensure you have GTK4 and libadwaita properly installed.")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
