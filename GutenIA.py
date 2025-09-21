@@ -31,6 +31,28 @@ class GutenAIWindow(Gtk.ApplicationWindow):
         # Header Bar con botones de ventana
         header_bar = Adw.HeaderBar()
         self.set_titlebar(header_bar)
+
+        # Área central con información del libro y archivo actual
+        self.title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.title_box.set_halign(Gtk.Align.CENTER)
+        self.title_box.set_valign(Gtk.Align.CENTER)
+
+        # Título del EPUB (más grande)
+        self.epub_title_label = Gtk.Label()
+        self.epub_title_label.set_text("Guten.AI")
+        self.epub_title_label.add_css_class("title")
+        self.epub_title_label.set_ellipsize(3)  # Ellipsize en el medio
+        self.title_box.append(self.epub_title_label)
+
+        # Archivo actual (más pequeño)
+        self.current_file_label = Gtk.Label()
+        self.current_file_label.set_text("")
+        self.current_file_label.add_css_class("subtitle")
+        self.current_file_label.set_ellipsize(3)  # Ellipsize en el medio
+        self.current_file_label.set_visible(False)  # Oculto inicialmente
+        self.title_box.append(self.current_file_label)
+
+        header_bar.set_title_widget(self.title_box)
         
         # Botón para mostrar/ocultar sidebar izquierdo
         self.sidebar_button = Gtk.ToggleButton()
@@ -603,6 +625,9 @@ class GutenAIWindow(Gtk.ApplicationWindow):
         main_view.set_child(content_box)
         self.main_box.append(main_view)
 
+        # Actualizar headerbar con el título del EPUB
+        self.update_headerbar_title()
+
     def update_sidebar_with_epub_structure(self):
         """Actualizar el sidebar con la estructura real del EPUB"""
         # Limpiar listbox actual
@@ -626,11 +651,27 @@ class GutenAIWindow(Gtk.ApplicationWindow):
         ]
         
         for icon, title, subtitle, items, section_type in sections:
-            if items:  # Solo mostrar secciones que tienen contenido
+            if items or section_type in ['text', 'styles', 'images', 'fonts']:  # Mostrar siempre estas secciones
                 # Crear ExpanderRow para cada sección
                 expander_row = Adw.ExpanderRow()
                 expander_row.set_title(f"{icon} {title}")
                 expander_row.set_subtitle(f"{subtitle} ({len(items)})")
+                
+                # Agregar botón de acción según el tipo de sección
+                if section_type in ['text', 'styles']:
+                    add_button = Gtk.Button()
+                    add_button.set_icon_name("list-add-symbolic")
+                    add_button.set_tooltip_text(f"Agregar nuevo {title.lower()}")
+                    add_button.connect("clicked", lambda btn, stype=section_type: self.add_new_file(stype))
+                    add_button.set_valign(Gtk.Align.CENTER)
+                    expander_row.add_suffix(add_button)
+                elif section_type in ['images', 'fonts']:
+                    import_button = Gtk.Button()
+                    import_button.set_icon_name("document-open-symbolic")
+                    import_button.set_tooltip_text(f"Importar {title.lower()}")
+                    import_button.connect("clicked", lambda btn, stype=section_type: self.import_files(stype))
+                    import_button.set_valign(Gtk.Align.CENTER)
+                    expander_row.add_suffix(import_button)
                 
                 # Agregar cada item como una fila anidada
                 for item in items:
@@ -640,6 +681,15 @@ class GutenAIWindow(Gtk.ApplicationWindow):
                     
                     # Hacer la fila activable/seleccionable
                     nested_row.set_activatable(True)
+                    
+                    # Agregar botón de renombrar para texto y estilos
+                    if section_type in ['text', 'styles']:
+                        rename_button = Gtk.Button()
+                        rename_button.set_icon_name("document-edit-symbolic")
+                        rename_button.set_tooltip_text("Renombrar archivo")
+                        rename_button.connect("clicked", lambda btn, itm=item, stype=section_type: self.rename_file(itm, stype))
+                        rename_button.set_valign(Gtk.Align.CENTER)
+                        nested_row.add_suffix(rename_button)
                     
                     # Guardar información del item en la fila para acceso posterior
                     nested_row.item_data = {
@@ -670,7 +720,28 @@ class GutenAIWindow(Gtk.ApplicationWindow):
             self.show_image_preview(item)
         else:
             self.show_file_info(item, section_type)
-
+    
+    def update_headerbar_title(self):
+        """Actualizar título en la headerbar según el EPUB y archivo actual"""
+        if hasattr(self, 'epub_data') and self.epub_data:
+            # Mostrar título del EPUB
+            epub_title = self.epub_data['metadata']['title']
+            self.epub_title_label.set_text(epub_title)
+            
+            # Mostrar archivo actual si existe
+            if hasattr(self, 'current_file') and self.current_file:
+                file_name = self.current_file['name']
+                # Mostrar solo el nombre del archivo sin la ruta
+                display_name = file_name.split('/')[-1] if '/' in file_name else file_name
+                self.current_file_label.set_text(display_name)
+                self.current_file_label.set_visible(True)
+            else:
+                self.current_file_label.set_visible(False)
+        else:
+            # Sin EPUB cargado
+            self.epub_title_label.set_text("Guten.AI")
+            self.current_file_label.set_visible(False)
+            
     def show_file_content(self, item, section_type):
         """Mostrar contenido de archivos de texto/estilos en el panel derecho"""
         try:
@@ -686,7 +757,11 @@ class GutenAIWindow(Gtk.ApplicationWindow):
                 book = self.epub_data['book_object']
                 epub_item = book.get_item_with_href(item['name'])
                 if epub_item:
-                    content = epub_item.get_content().decode('utf-8')
+                    content = epub_item.get_content()
+                    # Verificar si es bytes o string
+                    if isinstance(content, bytes):
+                        content = content.decode('utf-8')
+                    # Si ya es string, usarlo directamente
                 else:
                     return
             
@@ -765,7 +840,7 @@ class GutenAIWindow(Gtk.ApplicationWindow):
                 'item': item
             }
             self.current_source_view = source_view
-            
+            self.update_headerbar_title()
             # Actualizar previsualización si está visible
             if hasattr(self, 'preview_button') and self.preview_button.get_active():
                 self.update_preview()
@@ -789,7 +864,12 @@ class GutenAIWindow(Gtk.ApplicationWindow):
             book = self.epub_data['book_object']
             epub_item = book.get_item_with_href(file_key)
             if epub_item:
-                original_content = epub_item.get_content().decode('utf-8')
+                original_content = epub_item.get_content()
+                
+                # Asegurar que ambos contenidos sean strings para comparación
+                if isinstance(original_content, bytes):
+                    original_content = original_content.decode('utf-8')
+                # Si ya es string, usarlo directamente
                 
                 # Solo guardar si hay cambios
                 if current_content != original_content:
@@ -883,6 +963,368 @@ class GutenAIWindow(Gtk.ApplicationWindow):
         dialog = Adw.MessageDialog.new(self, "Error", message)
         dialog.add_response("ok", "OK")
         dialog.present()
+
+    def add_new_file(self, section_type):
+        """Agregar nuevo archivo HTML o CSS"""
+        if section_type == 'text':
+            title = "Nuevo capítulo HTML"
+            default_name = "nuevo_capitulo.xhtml"
+            template_content = """<?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE html>
+    <html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <title>Nuevo Capítulo</title>
+    </head>
+    <body>
+        <h1>Nuevo Capítulo</h1>
+        <p>Contenido del capítulo...</p>
+    </body>
+    </html>"""
+        elif section_type == 'styles':
+            title = "Nuevo archivo CSS"
+            default_name = "nuevo_estilo.css"
+            template_content = """/* Nuevo archivo de estilos */
+    body {
+        font-family: serif;
+        line-height: 1.6;
+        margin: 0;
+        padding: 20px;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+    }
+
+    p {
+        margin-bottom: 1em;
+    }
+    """
+        else:
+            return
+        
+        # Diálogo para nombre del archivo
+        dialog = Adw.MessageDialog.new(self, title, "Ingresa el nombre del archivo:")
+        dialog.add_response("cancel", "Cancelar")
+        dialog.add_response("create", "Crear")
+        dialog.set_response_appearance("create", Adw.ResponseAppearance.SUGGESTED)
+        
+        entry = Gtk.Entry()
+        entry.set_text(default_name)
+        entry.set_margin_top(12)
+        entry.set_margin_bottom(12)
+        entry.set_margin_start(12)
+        entry.set_margin_end(12)
+        
+        dialog.set_extra_child(entry)
+        dialog.connect("response", lambda d, r: self.on_new_file_response(d, r, entry, section_type, template_content))
+        dialog.present()
+
+    def on_new_file_response(self, dialog, response, entry, section_type, template_content):
+        """Callback para crear nuevo archivo"""
+        if response == "create":
+            filename = entry.get_text().strip()
+            if filename:
+                self.create_new_file(filename, section_type, template_content)
+        dialog.destroy()
+
+    def create_new_file(self, filename, section_type, content):
+        """Crear nuevo archivo en el EPUB"""
+        try:
+            book = self.epub_data['book_object']
+            
+            # Asegurar extensión correcta
+            if section_type == 'text' and not filename.endswith(('.html', '.xhtml')):
+                filename += '.xhtml'
+            elif section_type == 'styles' and not filename.endswith('.css'):
+                filename += '.css'
+            
+            # Crear path dentro de la estructura EPUB
+            if section_type == 'text':
+                file_path = f"Text/{filename}"
+                media_type = "application/xhtml+xml"
+            elif section_type == 'styles':
+                file_path = f"Styles/{filename}"
+                media_type = "text/css"
+            
+            # Verificar que no exista ya
+            existing_item = book.get_item_with_href(file_path)
+            if existing_item:
+                self.show_error_dialog(f"Ya existe un archivo con el nombre '{file_path}'")
+                return
+            
+            # Crear nuevo item - IMPORTANTE: convertir contenido a bytes
+            content_bytes = content.encode('utf-8') if isinstance(content, str) else content
+            
+            if section_type == 'text':
+                new_item = epub.EpubHtml(title=filename, file_name=file_path, content=content_bytes)
+                book.add_item(new_item)
+                # Agregar al spine
+                book.spine.append(new_item)
+            elif section_type == 'styles':
+                new_item = epub.EpubItem(uid=filename, file_name=file_path, media_type=media_type, content=content_bytes)
+                book.add_item(new_item)
+            
+            # Actualizar estructura local
+            item_info = {
+                'name': file_path,
+                'type': new_item.get_type() if hasattr(new_item, 'get_type') else None,
+                'media_type': media_type
+            }
+            self.epub_data['structure'][section_type].append(item_info)
+            
+            # Refrescar sidebar
+            self.update_sidebar_with_epub_structure()
+            
+            print(f"Archivo creado: {file_path}")
+            
+        except Exception as e:
+            self.show_error_dialog(f"Error al crear archivo: {str(e)}")
+
+    def rename_file(self, item, section_type):
+        """Renombrar archivo HTML o CSS"""
+        current_name = item['name'].split('/')[-1]  # Solo el nombre sin path
+        
+        dialog = Adw.MessageDialog.new(self, "Renombrar archivo", f"Nuevo nombre para '{current_name}':")
+        dialog.add_response("cancel", "Cancelar")
+        dialog.add_response("rename", "Renombrar")
+        dialog.set_response_appearance("rename", Adw.ResponseAppearance.SUGGESTED)
+        
+        entry = Gtk.Entry()
+        entry.set_text(current_name)
+        entry.set_margin_top(12)
+        entry.set_margin_bottom(12)
+        entry.set_margin_start(12)
+        entry.set_margin_end(12)
+        
+        dialog.set_extra_child(entry)
+        dialog.connect("response", lambda d, r: self.on_rename_response(d, r, entry, item, section_type))
+        dialog.present()
+
+    def on_rename_response(self, dialog, response, entry, item, section_type):
+        """Callback para renombrar archivo"""
+        if response == "rename":
+            new_name = entry.get_text().strip()
+            if new_name and new_name != item['name'].split('/')[-1]:
+                self.perform_rename(item, new_name, section_type)
+        dialog.destroy()
+
+    def perform_rename(self, item, new_name, section_type):
+        """Realizar el renombrado del archivo"""
+        try:
+            book = self.epub_data['book_object']
+            old_href = item['name']
+            
+            # Asegurar extensión correcta
+            if section_type == 'text' and not new_name.endswith(('.html', '.xhtml')):
+                new_name += '.xhtml'
+            elif section_type == 'styles' and not new_name.endswith('.css'):
+                new_name += '.css'
+            
+            # Crear nuevo path
+            path_parts = old_href.split('/')
+            path_parts[-1] = new_name
+            new_href = '/'.join(path_parts)
+            
+            # Verificar que no exista ya
+            existing_item = book.get_item_with_href(new_href)
+            if existing_item:
+                self.show_error_dialog(f"Ya existe un archivo con el nombre '{new_href}'")
+                return
+            
+            # Obtener item actual
+            epub_item = book.get_item_with_href(old_href)
+            if not epub_item:
+                self.show_error_dialog("No se pudo encontrar el archivo original")
+                return
+            
+            # Crear nuevo item con el contenido existente
+            content = epub_item.get_content()
+            
+            if section_type == 'text':
+                new_item = epub.EpubHtml(title=new_name, file_name=new_href, content=content)
+                # Reemplazar en spine
+                spine_items = []
+                for spine_item in book.spine:
+                    if hasattr(spine_item, 'get_name') and spine_item.get_name() == old_href:
+                        spine_items.append(new_item)
+                    else:
+                        spine_items.append(spine_item)
+                book.spine = spine_items
+            elif section_type == 'styles':
+                new_item = epub.EpubItem(
+                    uid=new_name, 
+                    file_name=new_href, 
+                    media_type=item['media_type'], 
+                    content=content
+                )
+            
+            # Remover item viejo y agregar nuevo
+            book.items.remove(epub_item)
+            book.add_item(new_item)
+            
+            # Actualizar estructura local
+            for i, struct_item in enumerate(self.epub_data['structure'][section_type]):
+                if struct_item['name'] == old_href:
+                    self.epub_data['structure'][section_type][i]['name'] = new_href
+                    break
+            
+            # Si este archivo está siendo editado, actualizar referencia
+            if hasattr(self, 'current_file') and self.current_file and self.current_file['name'] == old_href:
+                self.current_file['name'] = new_href
+                self.update_headerbar_title()
+            
+            # Actualizar archivos modificados si existe referencia
+            if old_href in self.modified_files:
+                self.modified_files[new_href] = self.modified_files.pop(old_href)
+            
+            # Refrescar sidebar
+            self.update_sidebar_with_epub_structure()
+            
+            print(f"Archivo renombrado: {old_href} -> {new_href}")
+            
+        except Exception as e:
+            self.show_error_dialog(f"Error al renombrar archivo: {str(e)}")
+
+def import_files(self, section_type):
+    """Importar archivos desde disco local"""
+    if section_type == 'images':
+        title = "Importar imágenes"
+        filters = [
+            ("Imágenes", ["*.jpg", "*.jpeg", "*.png", "*.gif", "*.svg", "*.webp"]),
+            ("Todos los archivos", ["*"])
+        ]
+    elif section_type == 'fonts':
+        title = "Importar fuentes"
+        filters = [
+            ("Fuentes", ["*.ttf", "*.otf", "*.woff", "*.woff2"]),
+            ("Todos los archivos", ["*"])
+        ]
+    else:
+        return
+    
+    dialog = Gtk.FileChooserDialog(
+        title=title,
+        parent=self,
+        action=Gtk.FileChooserAction.OPEN
+    )
+    
+    dialog.add_buttons(
+        "Cancelar", Gtk.ResponseType.CANCEL,
+        "Importar", Gtk.ResponseType.ACCEPT
+    )
+    
+    # Permitir selección múltiple
+    dialog.set_select_multiple(True)
+    
+    # Agregar filtros
+    for filter_name, patterns in filters:
+        file_filter = Gtk.FileFilter()
+        file_filter.set_name(filter_name)
+        for pattern in patterns:
+            file_filter.add_pattern(pattern)
+        dialog.add_filter(file_filter)
+    
+    dialog.connect("response", lambda d, r: self.on_import_response(d, r, section_type))
+    dialog.present()
+
+    def on_import_response(self, dialog, response, section_type):
+        """Callback para importar archivos"""
+        if response == Gtk.ResponseType.ACCEPT:
+            files = dialog.get_files()
+            for i in range(files.get_n_items()):
+                file = files.get_item(i)
+                file_path = file.get_path()
+                self.import_single_file(file_path, section_type)
+        dialog.destroy()
+
+    def import_single_file(self, file_path, section_type):
+        """Importar un archivo individual"""
+        try:
+            import os
+            import mimetypes
+            
+            filename = os.path.basename(file_path)
+            book = self.epub_data['book_object']
+            
+            # Leer contenido del archivo
+            with open(file_path, 'rb') as f:
+                content = f.read()
+            
+            # Determinar tipo MIME
+            mime_type, _ = mimetypes.guess_type(file_path)
+            if not mime_type:
+                if section_type == 'images':
+                    mime_type = "image/jpeg"  # Default
+                elif section_type == 'fonts':
+                    mime_type = "font/ttf"    # Default
+            
+            # Crear path dentro del EPUB
+            if section_type == 'images':
+                epub_path = f"Images/{filename}"
+            elif section_type == 'fonts':
+                epub_path = f"Fonts/{filename}"
+            
+            # Verificar que no exista ya
+            existing_item = book.get_item_with_href(epub_path)
+            if existing_item:
+                # Agregar número al final si ya existe
+                name_parts = filename.rsplit('.', 1)
+                if len(name_parts) == 2:
+                    base_name, extension = name_parts
+                    counter = 1
+                    while existing_item:
+                        new_filename = f"{base_name}_{counter}.{extension}"
+                        epub_path = f"{'Images' if section_type == 'images' else 'Fonts'}/{new_filename}"
+                        existing_item = book.get_item_with_href(epub_path)
+                        counter += 1
+                    filename = new_filename
+            
+            # Crear item EPUB
+            epub_item = epub.EpubItem(
+                uid=filename,
+                file_name=epub_path,
+                media_type=mime_type,
+                content=content
+            )
+            
+            book.add_item(epub_item)
+            
+            # Actualizar estructura local
+            item_info = {
+                'name': epub_path,
+                'type': epub_item.get_type() if hasattr(epub_item, 'get_type') else None,
+                'media_type': mime_type
+            }
+            self.epub_data['structure'][section_type].append(item_info)
+            
+            print(f"Archivo importado: {filename} -> {epub_path}")
+            
+        except Exception as e:
+            print(f"Error al importar {file_path}: {str(e)}")
+            self.show_error_dialog(f"Error al importar {os.path.basename(file_path)}: {str(e)}")
+
+    # Al final, refrescar sidebar después de importar todos los archivos
+    def on_import_response(self, dialog, response, section_type):
+        """Callback para importar archivos"""
+        if response == Gtk.ResponseType.ACCEPT:
+            files = dialog.get_files()
+            imported_count = 0
+            for i in range(files.get_n_items()):
+                file = files.get_item(i)
+                file_path = file.get_path()
+                try:
+                    self.import_single_file(file_path, section_type)
+                    imported_count += 1
+                except:
+                    continue
+            
+            if imported_count > 0:
+                # Refrescar sidebar
+                self.update_sidebar_with_epub_structure()
+                print(f"Importados {imported_count} archivos")
+        
+        dialog.destroy()
 
 class GutenAIApplication(Adw.Application):
     def __init__(self):
