@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        <meta name="author" content="Pedro Busto">
+        
+        <link rel="shortcut icon" href="../img/favicon.ico">
+        <title>¿Qué es Workspace? - Guten.AI</title>
+        <link href="../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../css/fontawesome.min.css" rel="stylesheet">
+        <link href="../css/brands.min.css" rel="stylesheet">
+        <link href="../css/solid.min.css" rel="stylesheet">
+        <link href="../css/v4-font-face.min.css" rel="stylesheet">
+        <link href="../css/base.css" rel="stylesheet">
+        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" >
+        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css" disabled>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="..">Guten.AI</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar-collapse" aria-controls="navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="nav-item">
+                                <a href=".." class="nav-link">Home</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../install/" class="nav-link">Instalación</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../usage/" class="nav-link">Uso básico</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../features/" class="nav-link">Funcionalidades</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../ai/" class="nav-link">Integración con IA</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../architecture/" class="nav-link">Arquitectura</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../credits/" class="nav-link">Créditos</a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="../license.md" class="nav-link">Licencia</a>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ms-md-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-bs-toggle="modal" data-bs-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a href="https://github.com/bustobusto/gutenai/edit/master/docs/workspace.md" class="nav-link">Edit on bustobusto/gutenai
+                                    </a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-bs-toggle="collapse" data-bs-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-body-tertiary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-bs-level="1"><a href="#que-es-workspace" class="nav-link">¿Qué es Workspace?</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-bs-level="2"><a href="#piezas-clave" class="nav-link">Piezas clave</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#que-si-hace-vs-que-no-hace" class="nav-link">¿Qué sí hace vs. qué no hace?</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#flujo-tipico-de-uso" class="nav-link">Flujo típico de uso</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-bs-level="1"><a href="#1-abrir-un-epub-en-un-workspace-temporal" class="nav-link">1) Abrir un .epub en un workspace temporal</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-bs-level="1"><a href="#2-inspeccionar" class="nav-link">2) Inspeccionar</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-bs-level="1"><a href="#3-leereditar-un-css" class="nav-link">3) Leer/editar un CSS</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-bs-level="1"><a href="#4-crear-una-imagen-nueva-y-moverla-a-la-carpeta-estandar-fs" class="nav-link">4) Crear una imagen nueva y moverla a la carpeta estándar (FS)</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-bs-level="1"><a href="#ojo-si-queres-que-forme-parte-del-epub-logico-tu-capa-de-modelo-debe" class="nav-link">Ojo: si querés que forme parte del EPUB “lógico”, tu capa de modelo debe</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-bs-level="1"><a href="#agregar-al-manifest-del-opf-y-referenciarla-desde-los-docs" class="nav-link">agregar al manifest del OPF y referenciarla desde los docs.</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-bs-level="1"><a href="#5-backup" class="nav-link">5) Backup</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            
+            <li class="nav-item" data-bs-level="1"><a href="#6-limpiar-workspace-cuando-termines" class="nav-link">6) Limpiar workspace cuando termines</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="que-es-workspace">¿Qué es Workspace?</h1>
+<p>Una capa de IO “limpia” sobre una carpeta EPUB ya descomprimida.<br />
+No toca el modelo (manifest/spine/nav) más que para leer; su trabajo es:</p>
+<ul>
+<li>Resolver rutas (<code>href ⇄ Path</code>) a partir del OPF.  </li>
+<li>Leer/escribir archivos con seguridad atómica.  </li>
+<li>Clasificar ítems (html, css, imágenes, fuentes, etc.) a partir de su <em>media-type</em>, extensión y <em>properties</em>.  </li>
+<li>Hacer backups y mover/borrar/crear archivos.  </li>
+<li>Publicar eventos para que la UI o el modelo reaccionen (y opcionalmente vigilar cambios con <em>watchdog</em>).  </li>
+</ul>
+<hr />
+<h2 id="piezas-clave">Piezas clave</h2>
+<h3 id="1-eventbus-minimo">1) EventBus mínimo</h3>
+<ul>
+<li><code>subscribe(name, cb)</code> / <code>publish(name, payload)</code>.  </li>
+<li>Silencioso ante errores en callbacks (no revienta el flujo).  </li>
+</ul>
+<h3 id="2-namespaces-constantes-epub">2) Namespaces &amp; constantes EPUB</h3>
+<ul>
+<li><code>NS</code> para XPath (<code>container.xml</code>, <code>content.opf</code>).  </li>
+<li>Directorios por defecto: <code>OEBPS/Text</code>, <code>Styles</code>, <code>Images</code>, <code>Fonts</code>.  </li>
+<li>Mapas de tipos: por MIME (<code>_MEDIA_TYPE_MAP</code>) y por extensión (<code>_EXT_MAP</code>).  </li>
+<li>Etiquetas semánticas (<code>ITEM_IMAGE</code>, <code>ITEM_STYLE</code>, etc.) alineadas a EPUB3.  </li>
+</ul>
+<h3 id="3-workspaceinfo">3) WorkspaceInfo</h3>
+<ul>
+<li>Guarda <code>root</code> (carpeta del EPUB inflado), <code>opf_path</code> y <code>opf_dir</code>.  </li>
+</ul>
+<h3 id="4-ciclo-de-vida-del-workspace">4) Ciclo de vida del workspace</h3>
+<ul>
+<li><strong>from_epub(epub_path, out_dir):</strong> descomprime el <code>.epub</code> en <code>out_dir</code>, valida <em>mimetype</em> (best-effort), descubre el OPF, crea <code>.gutenai.lock</code> y dispara <code>workspace.opened</code>.  </li>
+<li><strong>create_empty(out_dir, title, lang):</strong> arma un EPUB mínimo en disco:</li>
+<li><code>mimetype</code>, <code>META-INF/container.xml</code>.  </li>
+<li><code>OEBPS/content.opf</code> con <em>manifest</em> + <em>spine</em>.  </li>
+<li><code>Text/nav.xhtml</code>, <code>Text/chap1.xhtml</code>, <code>Styles/style.css</code>.  </li>
+<li>Dispara <code>workspace.created</code>.  </li>
+<li><strong>remove():</strong> borra todo y dispara <code>workspace.removed</code>.  </li>
+</ul>
+<h3 id="5-opf-y-rutas">5) OPF y rutas</h3>
+<ul>
+<li><code>_discover_opf()</code>: lee <code>META-INF/container.xml</code>, encuentra el <em>full-path</em> al OPF y setea <code>opf_path</code>/<code>opf_dir</code>.  </li>
+<li><code>resolve_href(href)</code>: <code>href → Path</code> absoluto (relativo al OPF).  </li>
+<li><code>rel_href(path)</code>: <code>Path → href</code> relativo al OPF (para reescribir <em>manifest</em> si alguna vez lo haces).  </li>
+</ul>
+<h3 id="6-manifest-y-clasificacion">6) Manifest y clasificación</h3>
+<ul>
+<li><code>iter_manifest()</code>: parsea el OPF y devuelve lista de dicts <code>{id, href, media_type, properties, path_abs}</code>.  </li>
+<li><code>classify_item(item)</code>: decide el tipo semántico:</li>
+<li>Primero mira <code>properties</code> (<code>nav</code>, <code>cover-image</code>).  </li>
+<li>Luego <code>media-type</code>.  </li>
+<li>Después extensión.  </li>
+<li>Por último heurísticas (<code>mt.startswith("image/")</code>, etc.).  </li>
+<li>Azúcares: <code>list_documents()</code>, <code>list_images()</code>, <code>list_styles()</code>, <code>list_fonts()</code>, etc.  </li>
+</ul>
+<h3 id="7-io-segura">7) IO segura</h3>
+<ul>
+<li><code>_coerce_path(href_or_path)</code>: acepta <code>href</code> o <code>Path</code> y lo resuelve dentro del workspace.  </li>
+<li><code>read_text</code> / <code>read_bytes</code> / <code>write_text</code> / <code>write_bytes</code> / <code>create_file</code> / <code>delete_file</code> / <code>move</code>.  </li>
+<li>Escritura atómica: <code>_atomic_write()</code> usa archivo temporal y <code>os.replace()</code> (seguro en POSIX/NTFS).  </li>
+<li><code>mimetype_for(path)</code>: adivina MIME por nombre (útil para clasificar nuevos assets).  </li>
+<li>Publica eventos: <code>file.created</code> / <code>file.changed</code> / <code>file.deleted</code> / <code>file.moved</code>.  </li>
+</ul>
+<h3 id="8-listado-y-backups">8) Listado y backups</h3>
+<ul>
+<li><code>list_all_files()</code>: <em>rglob</em> de todo el árbol (FS, no OPF).  </li>
+<li><code>snapshot_zip(out_zip=None)</code>: zip de la carpeta (ideal “Guardar punto de restauración”).  </li>
+</ul>
+<h3 id="9-watchdog-opcional">9) Watchdog (opcional)</h3>
+<ul>
+<li>Si <em>watchdog</em> está instalado: <code>start_watching()</code> levanta un <em>observer</em> recursivo y publica eventos en cambios del FS.  </li>
+<li><code>stop_watching()</code> lo detiene.  </li>
+</ul>
+<h3 id="10-lock-simple">10) Lock simple</h3>
+<ul>
+<li><code>_touch_lock()</code> crea <code>.gutenai.lock</code> con el pid.  </li>
+<li><code>_unlock()</code> lo borra al limpiar.  </li>
+</ul>
+<hr />
+<h2 id="que-si-hace-vs-que-no-hace">¿Qué sí hace vs. qué no hace?</h2>
+<h3 id="si">Sí:</h3>
+<ul>
+<li>Trabaja con el FS como verdad y usa el OPF solo para listar/clasificar ítems existentes.  </li>
+<li>Te da utilidades para editar archivos de forma segura, y enterarte por eventos.  </li>
+</ul>
+<h3 id="no">No:</h3>
+<ul>
+<li>No edita <em>manifest</em>, <em>spine</em> o <em>nav</em> (eso es del modelo).  </li>
+<li>Si agregás un archivo al FS, el OPF no “mágicamente” lo referencia.  </li>
+<li>Para eso tendrías que tener otra capa (modelo) que reescriba el <code>content.opf</code>.  </li>
+</ul>
+<hr />
+<h2 id="flujo-tipico-de-uso">Flujo típico de uso</h2>
+<p>```python
+from pathlib import Path
+from workspace import Workspace</p>
+<h1 id="1-abrir-un-epub-en-un-workspace-temporal">1) Abrir un .epub en un workspace temporal</h1>
+<p>ws = Workspace.from_epub(Path("libro.epub"), Path("tmp/ws"))</p>
+<h1 id="2-inspeccionar">2) Inspeccionar</h1>
+<p>docs = ws.list_documents()    # [(id, href, abs_path), ...]
+css  = ws.list_styles()
+imgs = ws.list_images()</p>
+<h1 id="3-leereditar-un-css">3) Leer/editar un CSS</h1>
+<p>style_id, style_href, style_path = css[0]
+css_src = ws.read_text(style_path)
+ws.write_text(style_path, css_src + "\n/<em> tweak </em>/")</p>
+<h1 id="4-crear-una-imagen-nueva-y-moverla-a-la-carpeta-estandar-fs">4) Crear una imagen nueva y moverla a la carpeta estándar (FS)</h1>
+<p>new_img = ws.create_file("OEBPS/Images/logo.png", b"...png bytes...")</p>
+<h1 id="ojo-si-queres-que-forme-parte-del-epub-logico-tu-capa-de-modelo-debe">Ojo: si querés que forme parte del EPUB “lógico”, tu capa de modelo debe</h1>
+<h1 id="agregar-al-manifest-del-opf-y-referenciarla-desde-los-docs">agregar <item> al manifest del OPF y referenciarla desde los docs.</h1>
+<h1 id="5-backup">5) Backup</h1>
+<p>zip_path = ws.snapshot_zip()</p>
+<h1 id="6-limpiar-workspace-cuando-termines">6) Limpiar workspace cuando termines</h1>
+<p>ws.remove()</p></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script src="../js/bootstrap.bundle.min.js"></script>
+        <script>
+            var base_url = "..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../js/base.js"></script>
+        <script src="../search/main.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>
