@@ -6,7 +6,7 @@ gi.require_version('Adw', '1')
 gi.require_version('GtkSource', '5')
 gi.require_version('WebKit', '6.0')
 
-from gi.repository import Gtk, Adw, Gio, GLib, GtkSource, WebKit
+from gi.repository import Gtk, Adw, Gio, GLib, GtkSource, WebKit, Gdk
 import ebooklib
 from ebooklib import epub
 import sys
@@ -1186,47 +1186,47 @@ class GutenAIWindow(Gtk.ApplicationWindow):
         except Exception as e:
             self.show_error_dialog(f"Error al renombrar archivo: {str(e)}")
 
-def import_files(self, section_type):
-    """Importar archivos desde disco local"""
-    if section_type == 'images':
-        title = "Importar imágenes"
-        filters = [
-            ("Imágenes", ["*.jpg", "*.jpeg", "*.png", "*.gif", "*.svg", "*.webp"]),
-            ("Todos los archivos", ["*"])
-        ]
-    elif section_type == 'fonts':
-        title = "Importar fuentes"
-        filters = [
-            ("Fuentes", ["*.ttf", "*.otf", "*.woff", "*.woff2"]),
-            ("Todos los archivos", ["*"])
-        ]
-    else:
-        return
-    
-    dialog = Gtk.FileChooserDialog(
-        title=title,
-        parent=self,
-        action=Gtk.FileChooserAction.OPEN
-    )
-    
-    dialog.add_buttons(
-        "Cancelar", Gtk.ResponseType.CANCEL,
-        "Importar", Gtk.ResponseType.ACCEPT
-    )
-    
-    # Permitir selección múltiple
-    dialog.set_select_multiple(True)
-    
-    # Agregar filtros
-    for filter_name, patterns in filters:
-        file_filter = Gtk.FileFilter()
-        file_filter.set_name(filter_name)
-        for pattern in patterns:
-            file_filter.add_pattern(pattern)
-        dialog.add_filter(file_filter)
-    
-    dialog.connect("response", lambda d, r: self.on_import_response(d, r, section_type))
-    dialog.present()
+    def import_files(self, section_type):
+        """Importar archivos desde disco local"""
+        if section_type == 'images':
+            title = "Importar imágenes"
+            filters = [
+                ("Imágenes", ["*.jpg", "*.jpeg", "*.png", "*.gif", "*.svg", "*.webp"]),
+                ("Todos los archivos", ["*"])
+            ]
+        elif section_type == 'fonts':
+            title = "Importar fuentes"
+            filters = [
+                ("Fuentes", ["*.ttf", "*.otf", "*.woff", "*.woff2"]),
+                ("Todos los archivos", ["*"])
+            ]
+        else:
+            return
+
+        dialog = Gtk.FileChooserDialog(
+            title=title,
+            parent=self,
+            action=Gtk.FileChooserAction.OPEN
+        )
+
+        dialog.add_buttons(
+            "Cancelar", Gtk.ResponseType.CANCEL,
+            "Importar", Gtk.ResponseType.ACCEPT
+        )
+
+        # Permitir selección múltiple
+        dialog.set_select_multiple(True)
+
+        # Agregar filtros
+        for filter_name, patterns in filters:
+            file_filter = Gtk.FileFilter()
+            file_filter.set_name(filter_name)
+            for pattern in patterns:
+                file_filter.add_pattern(pattern)
+            dialog.add_filter(file_filter)
+
+        dialog.connect("response", lambda d, r: self.on_import_response(d, r, section_type))
+        dialog.present()
 
     def on_import_response(self, dialog, response, section_type):
         """Callback para importar archivos"""
@@ -1330,7 +1330,7 @@ class GutenAIApplication(Adw.Application):
     def __init__(self):
         super().__init__(application_id="com.gutenai.editor")
         self.connect('activate', self.on_activate)
-        
+        self.setup_icon_theme()
         # Crear acción para "Acerca de"
         about_action = Gio.SimpleAction.new("about", None)
         about_action.connect("activate", self.on_about_action)
@@ -1360,138 +1360,35 @@ class GutenAIApplication(Adw.Application):
         """Mostrar diálogo Acerca de"""
         from about import create_about_window
         about = create_about_window(self.win)
+        about.set_application_icon("com.gutenai.editor")
         about.present()
 
     def on_shortcuts_action(self, action, param):
         """Mostrar ventana de atajos de teclado"""
-        shortcuts_window = self.create_shortcuts_window()
+        from shortcuts_window import create_shortcuts_window
+        shortcuts_window = create_shortcuts_window()
         shortcuts_window.set_transient_for(self.win)
         shortcuts_window.present()
 
-    def create_shortcuts_window(self):
-        """Crear ventana de atajos de teclado"""
-        builder = Gtk.Builder()
-        
-        # Definir XML para la ventana de atajos
-        shortcuts_xml = """<?xml version="1.0" encoding="UTF-8"?>
-<interface>
-  <object class="GtkShortcutsWindow" id="shortcuts_window">
-    <property name="modal">1</property>
-    <child>
-      <object class="GtkShortcutsSection">
-        <property name="visible">1</property>
-        <property name="section-name">general</property>
-        <property name="title" translatable="yes">General</property>
-        <child>
-          <object class="GtkShortcutsGroup">
-            <property name="visible">1</property>
-            <property name="title" translatable="yes">Archivo</property>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Abrir EPUB</property>
-                <property name="accelerator">&lt;Ctrl&gt;o</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Guardar cambios</property>
-                <property name="accelerator">&lt;Ctrl&gt;s</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Salir</property>
-                <property name="accelerator">&lt;Ctrl&gt;q</property>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
-          <object class="GtkShortcutsGroup">
-            <property name="visible">1</property>
-            <property name="title" translatable="yes">Vista</property>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Mostrar/Ocultar sidebar izquierdo</property>
-                <property name="accelerator">F9</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Mostrar/Ocultar previsualización</property>
-                <property name="accelerator">&lt;Ctrl&gt;p</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Previsualización en ventana separada</property>
-                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;p</property>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
-          <object class="GtkShortcutsGroup">
-            <property name="visible">1</property>
-            <property name="title" translatable="yes">Edición</property>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Deshacer</property>
-                <property name="accelerator">&lt;Ctrl&gt;z</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Rehacer</property>
-                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;z</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Buscar</property>
-                <property name="accelerator">&lt;Ctrl&gt;f</property>
-              </object>
-            </child>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Buscar y reemplazar</property>
-                <property name="accelerator">&lt;Ctrl&gt;h</property>
-              </object>
-            </child>
-          </object>
-        </child>
-        <child>
-          <object class="GtkShortcutsGroup">
-            <property name="visible">1</property>
-            <property name="title" translatable="yes">Ayuda</property>
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="title" translatable="yes">Atajos de teclado</property>
-                <property name="accelerator">&lt;Ctrl&gt;question</property>
-              </object>
-            </child>
-          </object>
-        </child>
-      </object>
-    </child>
-  </object>
-</interface>"""
-        
-        builder.add_from_string(shortcuts_xml)
-        shortcuts_window = builder.get_object("shortcuts_window")
-        
-        return shortcuts_window
+    def setup_icon_theme(self):
+        """Configurar el tema de iconos para usar iconos personalizados"""
+        try:
+            # Obtener el tema de iconos por defecto
+            icon_theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+            
+            # Agregar la ruta de iconos personalizados
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            icons_dir = os.path.join(current_dir, "data", "icons")
+            
+            if os.path.exists(icons_dir):
+                icon_theme.add_search_path(icons_dir)
+                print(f"Iconos personalizados cargados desde: {icons_dir}")
+            else:
+                print(f"Directorio de iconos no encontrado: {icons_dir}")
+                
+        except Exception as e:
+            print(f"Error al configurar iconos: {e}")
+
 
 def main():
     app = GutenAIApplication()
