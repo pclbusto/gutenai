@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import zipfile, tempfile, shutil, os, sys
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+# Preview HTML opcional
+_HTML_AVAILABLE = False
+try:
+    from tkinterweb import HtmlFrame  # pip install tkinterweb
+    _HTML_AVAILABLE = True
+except Exception:
+    _HTML_AVAILABLE = False
+
+APP_TITLE = "EPUB Inspector (Tkinter)"
+
+class EpubInspector(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title(APP_TITLE); self.geometry("1200x750")
+        self.temp_dir: Path | None = None
+        self.opf_path: Path | None = None
+        self.spine_paths: list[Path] = []
+        self.manifest: dict[str, dict] = {}  # id -> {href, media_type, path}
+        self._build_ui()
+        self._build_menu()
+
+    # ---------- UI ----------
+    def _build_ui(self):
+        self.columnconfigure(1, weight=1)
+        self.rowconfigure(0, weight=1)
+
+        # Izquierda: Árbol
+        left = ttk.Frame(self); left.grid(row=0, column=0, sticky="nsw")
+        left.rowconfigure(1, weight=1)
+        ttk.Label(left, text="Contenido EPUB", font=("TkDefaultFont", 10, "bold")).grid(row=0, column=0, padx=8, pady=6, sticky="w")
+
+        self.tree = ttk.Treeview(left, show="tree", columns=("path", "mt"), height=30)
+        self.tree.column("path", width=0, stretch=False)  # oculta
+        self.tree.column("mt", width=0, stretch=False)    # oculta
+        self.tree.grid(row=1, column=0, sticky="nsw")
+        self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
+        yscroll = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=yscroll.set)
+        yscroll.grid(row=1, column=1, sticky="ns")
+
+        # Derecha: Preview / Metadata
+        right = ttk.Frame(self); right.grid(row=0, column=1, sticky="nsew")
+        right.rowconfigure(0, weight=1); right.columnconfigure(0, weight=1)
+
+        if _HTML_AVAILABLE:
+            self.html = HtmlFrame(right)
+            self.html.grid(row=0, column=0, sticky="nsew")
+            self.txt = None
+        else:
+            self.txt = tk.Text(right, wrap="word")
+            self.txt.grid(row=0, column=0, sticky="nsew")
+            y2 = ttk.Scrollbar(right, orient="vertical", command=self.txt.yview)
+            self.txt.configure(yscrollcommand=y2.set); y2.grid(row=0, column=1, sticky="ns")
+            self.html = None
+
+        # Barra de estado
+        self.status = tk.StringVar(value="Archivo → Abrir EPUB…")
+        ttk.Label(self, textvariable=self.status, anchor="w").grid(row=1, column=0, columnspan=2, sticky="ew")
+
+    def _build_menu(self):
+        mbar = tk.Menu(self); self.config(menu=mbar)
+        mf = tk.Menu(mbar, tearoff=False)
+        mf.add_command(label="Abrir EPUB…", command=self.open_epub, accelerator="Ctrl+O")
+        mf.add_separator(); mf.add_command(label="Salir", command=self._quit)
+        mbar.add_cascade(label="Archivo", menu=mf)
+        mh = tk.Menu(mbar, tearoff=False)
+        mh.add_command(label="Acerca de…", command=lambda: messagebox.showinfo("Acerca de", APP_TITLE))
+        mbar.add_cascade(label="Ayuda", menu=mh)
+        self.bind_all("<Control-o>", lambda e: self.open_epub())
+
+    # ---------- Lógica EPUB ----------
+    def open_epub(self):
+        path = filedialog.askopenfilename(title="Abrir EPUB", filetypes=[("EPUB", "*.epub"), ("Todos", "*.*")])
+        if not path: return
+        try:
+            self._load_epub(Path(path))
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo abrir el EPUB:\n{e}")
+
+    def _load_epub(self, epub_path: Path):
+        self._cleanup_temp()
+        self.temp_dir = Path(tempfile.mkdtemp(prefix="epub_inspect_"))
+        with zipfile.ZipFile(epub_path, "r") as z: z.extractall(self.temp_dir)
+
+        container = self.temp_dir / "META-INF" / "container.xml"
+        if not container.exists(): raise RuntimeError("META-INF/container.xml no encontrado")
+        root = ET.parse(container).getroot()
+        ns_c = {"c": "urn:oasis:names:tc:opendocument:xmlns:container"}
+        rf = root.find(".//c:rootfile", ns_c)
+        if rf is None: raise RuntimeError("container.xml inválido (sin rootfile)")
+        self.opf_path = (self.temp_dir / rf.attrib["full-path"]).resolve()
+
+        self._parse_opf(self.opf_path)
+        self._populate_tree()
+        self.status.set(f"Abierto: {epub_path.name}")
+
+        # Mostrar metadata de inicio
+        self._show_metadata()
+
+    def _parse_opf(self, opf: Path):
+        self.manifest.clear(); self.spine_paths.clear()
+        root = ET.parse(opf).getroot()
+        ns = {"opf":"http://www.idpf.org/2007/opf","dc":"http://purl.org/dc/elements/1.1/"}
+        base = opf.parent
+
+        for item in root.findall(".//opf:manifest/opf:item", ns):
+            _id = item.attrib.get("id"); href = item.attrib.get("href"); mt = item.attrib.get("media-type","")
+            if _id and href:
+                p = (base / href).resolve()
+                self.manifest[_id] = {"href": href, "media_type": mt, "path": p}
+
+        for itref in root.findall(".//opf:spine/opf:itemref", ns):
+            idref = itref.attrib.get("idref")
+            if idref and idref in self.manifest:
+                self.spine_paths.append(self.manifest[idref]["path"])
+
+        # Metadata cruda (guardada para _show_metadata)
+        self._opf_root = root
+        self._opf_ns = ns
+        self._opf_base = base
+
+    # ---------- Árbol ----------
+    def _populate_tree(self):
+        self.tree.delete(*self.tree.get_children())
+
+        # Nodos raíz por categoría
+        nid_meta = self.tree.insert("", "end", text="Metadata", open=True, values=("", ""))
+        nid_text = self.tree.insert("", "end", text=f"Texto ({len(self.spine_paths)})", open=True, values=("", ""))
+        nid_css  = self.tree.insert("", "end", text="Estilos", open=False, values=("", ""))
+        nid_img  = self.tree.insert("", "end", text="Imágenes", open=False, values=("", ""))
+        nid_font = self.tree.insert("", "end", text="Fuentes", open=False, values=("", ""))
+        nid_js   = self.tree.insert("", "end", text="Scripts", open=False, values=("", ""))
+        nid_oth  = self.tree.insert("", "end", text="Otros", open=False, values=("", ""))
+
+        def add(parent, path: Path, media_type: str):
+            rel = path.relative_to(self.temp_dir).as_posix()
+            iid = self.tree.insert(parent, "end", text=rel, values=(str(path), media_type))
+            return iid
+
+        # Texto (spine)
+        for p in self.spine_paths:
+            add(nid_text, p, self._guess_mt(p))
+
+        # Resto por manifest
+        text_set = set(self.spine_paths)
+        for entry in self.manifest.values():
+            p, mt = entry["path"], entry["media_type"]
+            if p in text_set: continue
+            mt = mt or self._guess_mt(p)
+            if mt.startswith("text/css") or p.suffix.lower()==".css":
+                add(nid_css, p, mt)
+            elif mt.startswith("image/") or p.suffix.lower() in (".jpg",".jpeg",".png",".gif",".svg",".webp",".bmp",".tiff"):
+                add(nid_img, p, mt)
+            elif p.suffix.lower() in (".ttf",".otf",".woff",".woff2"):
+                add(nid_font, p, mt or "font")
+            elif p.suffix.lower()==".js" or mt in ("application/javascript","text/javascript"):
+                add(nid_js, p, mt or "application/javascript")
+            else:
+                add(nid_oth, p, mt or "unknown")
+
+    def _guess_mt(self, p: Path) -> str:
+        s = p.suffix.lower()
+        if s in (".xhtml",".html",".htm"): return "application/xhtml+xml"
+        if s==".css": return "text/css"
+        if s in (".jpg",".jpeg"): return "image/jpeg"
+        if s==".png": return "image/png"
+        if s==".svg": return "image/svg+xml"
+        if s in (".ttf",".otf"): return "font"
+        if s in (".woff",".woff2"): return "font/woff"
+        if s==".js": return "application/javascript"
+        return "application/octet-stream"
+
+    # ---------- Preview / Metadata ----------
+    def _on_tree_select(self, _e):
+        sel = self.tree.selection()
+        if not sel: return
+        iid = sel[0]
+        text = self.tree.item(iid, "text")
+        path_str = self.tree.set(iid, "path")
+        if not path_str:   # nodo de categoría, ej. "Metadata"
+            if text == "Metadata":
+                self._show_metadata()
+            return
+        self._preview_file(Path(path_str), self.tree.set(iid, "mt"))
+
+    def _preview_file(self, path: Path, media_type: str):
+        suf = path.suffix.lower()
+        if suf in (".xhtml",".html",".htm"):
+            if _HTML_AVAILABLE:
+                self.html.load_file(str(path))
+            else:
+                self._set_text(path.read_text(encoding="utf-8", errors="ignore"))
+        elif suf in (".css",".xml",".opf",".ncx",".txt",".js"):
+            self._set_text(path.read_text(encoding="utf-8", errors="ignore"))
+        else:
+            info = path.stat()
+            self._set_text(f"[{media_type or 'binario'}] {path.name}\nTamaño: {info.st_size} bytes\nRuta: {path}")
+        self.status.set(str(path.relative_to(self.temp_dir)))
+
+    def _set_text(self, s: str):
+        if self.txt:
+            self.txt.delete("1.0","end"); self.txt.insert("1.0", s)
+        elif self.html:
+            # Mostrar como <pre> si estamos usando HtmlFrame
+            esc = (s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;"))
+            self.html.load_html(f"<pre style='white-space:pre-wrap'>{esc}</pre>")
+
+    def _show_metadata(self):
+        if not self.opf_path: return
+        md = self._extract_metadata()
+        lines = []
+        for k in ("title","creator","contributor","publisher","language","identifier","date","subject","description","rights"):
+            v = md.get(k)
+            if v:
+                if isinstance(v, list):
+                    for i,vi in enumerate(v,1): lines.append(f"{k.capitalize()} #{i}: {vi}")
+                else:
+                    lines.append(f"{k.capitalize()}: {v}")
+        lines.append(f"OPF: {self.opf_path.relative_to(self.temp_dir)}")
+        lines.append(f"Capítulos (spine): {len(self.spine_paths)}")
+        self._set_text("\n".join(lines))
+        self.status.set("Metadata")
+
+    def _extract_metadata(self) -> dict:
+        root, ns = self._opf_root, self._opf_ns
+        def texts(xpath):
+            return [el.text.strip() for el in root.findall(xpath, ns) if (el.text or "").strip()]
+        md = {
+            "title":       (texts(".//dc:title") or [None])[0],
+            "creator":      texts(".//dc:creator"),
+            "contributor":  texts(".//dc:contributor"),
+            "publisher":   (texts(".//dc:publisher") or [None])[0],
+            "language":    (texts(".//dc:language") or [None])[0],
+            "identifier":   texts(".//dc:identifier"),
+            "date":        (texts(".//dc:date") or [None])[0],
+            "subject":      texts(".//dc:subject"),
+            "description": (texts(".//dc:description") or [None])[0],
+            "rights":      (texts(".//dc:rights") or [None])[0],
+        }
+        return {k:v for k,v in md.items() if v}
+    # ---------- util ----------
+    def _cleanup_temp(self):
+        if self.temp_dir and self.temp_dir.exists():
+            try: shutil.rmtree(self.temp_dir)
+            except Exception: pass
+        self.temp_dir = None
+
+    def _quit(self):
+        self._cleanup_temp(); self.destroy()
+
+if __name__ == "__main__":
+    app = EpubInspector()
+    app.mainloop()

@@ -1,0 +1,100 @@
+/* Estilos para la ventana de atajos de teclado libadwaita */
+
+.shortcuts-group {
+    background: alpha(@accent_color, 0.05);
+    border-radius: 12px;
+    margin: 6px 0;
+    padding: 12px;
+    box-shadow: 0 1px 3px alpha(black, 0.1);
+}
+
+.shortcuts-group > .header {
+    font-weight: 600;
+    color: @accent_color;
+    margin-bottom: 8px;
+}
+
+.shortcut-badge {
+    font-family: monospace;
+    font-size: 0.85em;
+    font-weight: 600;
+    background: @accent_bg_color;
+    color: @accent_fg_color;
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin: 2px;
+    min-width: 60px;
+}
+
+.property row {
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: all 200ms ease;
+}
+
+.property row:hover {
+    background: alpha(@accent_color, 0.08);
+    transform: translateX(2px);
+}
+
+.property .title {
+    font-weight: 500;
+    color: @window_fg_color;
+}
+
+.property .subtitle {
+    font-size: 0.9em;
+    color: alpha(@window_fg_color, 0.7);
+    margin-top: 2px;
+}
+
+/* Animaciones suaves */
+.shortcuts-group,
+.property row,
+.shortcut-badge {
+    transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Estilos hover mejorados */
+.shortcut-badge:hover {
+    background: @accent_color;
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px alpha(@accent_color, 0.3);
+}
+
+/* Separadores visuales */
+.shortcuts-group + .shortcuts-group {
+    border-top: 1px solid alpha(@borders, 0.3);
+    margin-top: 16px;
+    padding-top: 20px;
+}
+
+/* Estilos para ventanas pequeñas - sin media queries */
+.shortcuts-group.compact {
+    margin: 4px 0;
+    padding: 8px;
+}
+
+.shortcuts-group.compact .property row {
+    padding: 6px 8px;
+}
+
+.shortcuts-group.compact .shortcut-badge {
+    font-size: 0.8em;
+    padding: 3px 6px;
+    min-width: 50px;
+}
+
+/* Scroll suave - eliminado scroll-behavior incompatible */
+
+/* Efectos de foco para accesibilidad */
+.property row:focus-visible {
+    outline: 2px solid @accent_color;
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
+.shortcut-badge:focus-visible {
+    outline: 2px solid @accent_color;
+    outline-offset: 2px;
+}
