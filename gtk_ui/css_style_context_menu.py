@@ -245,7 +245,20 @@ class DynamicStyleContextMenu:
         
         # Crear menú
         menu = Gio.Menu()
-        
+
+        # *** SECCIÓN DE FORMATO HTML (incluye listas) ***
+        if has_selection:
+            format_section = Gio.Menu()
+            format_section.append("Párrafo <p>", "win.wrap_paragraph")
+            format_section.append("Encabezado H1", "win.wrap_h1")
+            format_section.append("Encabezado H2", "win.wrap_h2")
+            format_section.append("Encabezado H3", "win.wrap_h3")
+            format_section.append("Cita <blockquote>", "win.wrap_blockquote")
+            format_section.append("Lista con viñetas <ul>", "win.wrap_unordered_list")
+            format_section.append("Lista numerada <ol>", "win.wrap_ordered_list")
+            format_section.append("Elemento de lista <li>", "win.wrap_list_item")
+            menu.append_section("📝 Formato HTML", format_section)
+
         # Sección de edición básica
         if has_selection:
             edit_section = Gio.Menu()

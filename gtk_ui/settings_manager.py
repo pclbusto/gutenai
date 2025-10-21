@@ -17,6 +17,10 @@ class SettingsManager:
         self.config_file = self.config_dir / "config.json"
         self.settings = self._load_settings()
 
+        # Configuración específica por proyecto/libro
+        self.project_configs = {}
+        self.current_project_path = None
+
     def _get_config_directory(self) -> Path:
         """Obtiene el directorio de configuración según el sistema"""
 
@@ -167,6 +171,96 @@ class SettingsManager:
         for key, value in kwargs.items():
             self.set(f"ui.{key}", value)
         self.save_settings()
+
+    def set_current_project(self, project_path: Optional[str]):
+        """Establece el proyecto actual para configuración específica"""
+        if project_path:
+            self.current_project_path = str(Path(project_path).resolve())
+            self._load_project_config()
+        else:
+            self.current_project_path = None
+
+    def _get_project_config_file(self, project_path: str) -> Path:
+        """Obtiene la ruta del archivo de configuración del proyecto"""
+        # Crear un hash del path para evitar problemas con caracteres especiales
+        import hashlib
+        path_hash = hashlib.md5(project_path.encode()).hexdigest()[:16]
+        project_name = Path(project_path).stem
+        config_filename = f"project_{project_name}_{path_hash}.json"
+        return self.config_dir / "projects" / config_filename
+
+    def _load_project_config(self):
+        """Carga la configuración específica del proyecto"""
+        if not self.current_project_path:
+            return
+
+        config_file = self._get_project_config_file(self.current_project_path)
+
+        if config_file.exists():
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    self.project_configs[self.current_project_path] = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"[SETTINGS] Error cargando config del proyecto: {e}")
+                self.project_configs[self.current_project_path] = {}
+        else:
+            self.project_configs[self.current_project_path] = {}
+
+    def _save_project_config(self):
+        """Guarda la configuración específica del proyecto"""
+        if not self.current_project_path:
+            return
+
+        config_file = self._get_project_config_file(self.current_project_path)
+        config_file.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            project_settings = self.project_configs.get(self.current_project_path, {})
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(project_settings, f, indent=2, ensure_ascii=False)
+        except IOError as e:
+            print(f"[SETTINGS] Error guardando config del proyecto: {e}")
+
+    def get_project_setting(self, key_path: str, default: Any = None) -> Any:
+        """Obtiene configuración específica del proyecto actual, fallback a global"""
+        if self.current_project_path and self.current_project_path in self.project_configs:
+            project_config = self.project_configs[self.current_project_path]
+            keys = key_path.split('.')
+            value = project_config
+
+            try:
+                for key in keys:
+                    value = value[key]
+                return value
+            except (KeyError, TypeError):
+                pass  # Fallback a configuración global
+
+        # Fallback a configuración global
+        return self.get(key_path, default)
+
+    def set_project_setting(self, key_path: str, value: Any):
+        """Establece configuración específica del proyecto actual"""
+        if not self.current_project_path:
+            # Si no hay proyecto, usar configuración global
+            self.set(key_path, value)
+            self.save_settings()
+            return
+
+        if self.current_project_path not in self.project_configs:
+            self.project_configs[self.current_project_path] = {}
+
+        keys = key_path.split('.')
+        current = self.project_configs[self.current_project_path]
+
+        # Navegar hasta el penúltimo nivel
+        for key in keys[:-1]:
+            if key not in current:
+                current[key] = {}
+            current = current[key]
+
+        # Establecer el valor final
+        current[keys[-1]] = value
+        self._save_project_config()
 
 
 # Singleton global

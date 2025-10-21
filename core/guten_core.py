@@ -33,6 +33,8 @@ import xml.etree.ElementTree as ET
 import os
 import html
 import re
+import uuid
+from datetime import datetime
 
 try:
     from ebooklib import epub
@@ -264,13 +266,17 @@ class GutenCore:
 </container>"""
         (root / "META-INF" / "container.xml").write_text(container_xml, encoding="utf-8")
 
-        # OPF mínimo
+        # OPF mínimo con UUID válido y dcterms:modified
+        book_uuid = str(uuid.uuid4())
+        modified_date = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
         opf_xml = f"""<?xml version='1.0' encoding='UTF-8'?>
 <package version="3.0" unique-identifier="bookid" xmlns="{NS['opf']}" xml:lang="{lang}">
-  <metadata xmlns:dc="{NS['dc']}">
-    <dc:identifier id="bookid">urn:uuid:{int(time.time())}</dc:identifier>
+  <metadata xmlns:dc="{NS['dc']}" xmlns:dcterms="http://purl.org/dc/terms/">
+    <dc:identifier id="bookid">urn:uuid:{book_uuid}</dc:identifier>
     <dc:title>{title}</dc:title>
     <dc:language>{lang}</dc:language>
+    <meta property="dcterms:modified">{modified_date}</meta>
   </metadata>
   <manifest>
     <item id="style" href="{Path(lay['STYLES']).name}/style.css" media-type="text/css"/>
@@ -286,9 +292,11 @@ class GutenCore:
 
         # archivos iniciales
         (root / lay["STYLES"] / "style.css").write_text("body{font-family:serif;}", encoding="utf-8")
-        nav_xhtml = """<?xml version='1.0' encoding='UTF-8'?>
+        # Crear nav.xhtml que apunte al primer documento del spine
+        first_doc_href = f"{Path(lay['TEXT']).name}/chap1.xhtml"  # Por defecto
+        nav_xhtml = f"""<?xml version='1.0' encoding='UTF-8'?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en" xml:lang="en">
 <head><title>TOC</title><meta charset="utf-8"/></head>
 <body>
 <nav epub:type="toc" id="toc"><ol><li><a href="chap1.xhtml">Chapter 1</a></li></ol></nav>
@@ -396,6 +404,8 @@ class GutenCore:
                      identifier: Optional[str] = None) -> None:
         assert self.opf_tree is not None
         root = self.opf_tree.getroot()
+        metadata_changed = False
+
         if title is not None:
             el = root.find(".//dc:title", NS)
             if el is None:
@@ -403,6 +413,8 @@ class GutenCore:
                 el = ET.SubElement(md, f"{{{NS['dc']}}}title") if md is not None else None
             if el is not None:
                 el.text = title
+                metadata_changed = True
+
         if language is not None:
             el = root.find(".//dc:language", NS)
             if el is None:
@@ -410,6 +422,8 @@ class GutenCore:
                 el = ET.SubElement(md, f"{{{NS['dc']}}}language") if md is not None else None
             if el is not None:
                 el.text = language
+                metadata_changed = True
+
         if identifier is not None:
             el = root.find(".//dc:identifier[@id]", NS) or root.find(".//dc:identifier", NS)
             if el is None:
@@ -417,7 +431,32 @@ class GutenCore:
                 el = ET.SubElement(md, f"{{{NS['dc']}}}identifier", {"id": "bookid"}) if md is not None else None
             if el is not None:
                 el.text = identifier
+                metadata_changed = True
+
+        # Actualizar dcterms:modified si se cambió algún metadato
+        if metadata_changed:
+            self._update_modified_date()
+
         self._save_opf()
+
+    def _update_modified_date(self):
+        """Actualiza o agrega el elemento dcterms:modified"""
+        assert self.opf_tree is not None
+        root = self.opf_tree.getroot()
+        modified_date = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        # Buscar elemento existente
+        modified_el = root.find(".//opf:meta[@property='dcterms:modified']", NS)
+        if modified_el is not None:
+            modified_el.text = modified_date
+        else:
+            # Crear nuevo elemento
+            md = root.find(".//opf:metadata", NS)
+            if md is not None:
+                # Asegurar que el namespace dcterms esté declarado
+                if "xmlns:dcterms" not in md.attrib:
+                    md.set("xmlns:dcterms", "http://purl.org/dc/terms/")
+                ET.SubElement(md, "meta", {"property": "dcterms:modified"}).text = modified_date
 
     # -------------------------
     # Spine
@@ -605,17 +644,60 @@ class GutenCore:
         for style_item in self.list_items(KIND_STYLE):
             try:
                 content = self.read_text(style_item.href)
-                
+
                 if old_name in content:
                     pattern = r'\b' + re.escape(old_name) + r'\b'
                     updated_content = re.sub(pattern, new_name, content)
-                    
+
                     if updated_content != content:
                         self.write_text(style_item.href, updated_content)
                         print(f"[RENAME] Updated references in {style_item.href}")
-                        
+
             except Exception as e:
                 print(f"[WARNING] Could not update references in {style_item.href}: {e}")
+
+        # Actualizar referencias en nav.xhtml específicamente
+        nav_href = self.get_nav_href()
+        if nav_href:
+            try:
+                nav_content = self.read_text(nav_href)
+
+                if old_name in nav_content:
+                    # Para nav.xhtml, ser más específico con los patrones de enlaces
+                    patterns = [
+                        rf'href="{re.escape(old_name)}"',
+                        rf"href='{re.escape(old_name)}'",
+                        rf'href="{re.escape(old_href)}"',
+                        rf"href='{re.escape(old_href)}'"
+                    ]
+
+                    updated_nav = nav_content
+                    for pattern in patterns:
+                        # Reemplazar con nuevo nombre, manteniendo las comillas
+                        if '"' in pattern:
+                            replacement = f'href="{new_name}"'
+                        else:
+                            replacement = f"href='{new_name}'"
+                        updated_nav = re.sub(pattern, replacement, updated_nav)
+
+                    if updated_nav != nav_content:
+                        self.write_text(nav_href, updated_nav)
+                        print(f"[RENAME] Updated navigation references in {nav_href}")
+
+            except Exception as e:
+                print(f"[WARNING] Could not update references in nav.xhtml: {e}")
+
+        # Si se renombró el primer documento del spine, regenerar navegación básica
+        spine_items = self.get_spine()
+        if spine_items:
+            first_doc_id = spine_items[0]
+            first_doc = self.items_by_id.get(first_doc_id)
+            if first_doc and first_doc.href == new_href:
+                try:
+                    self.generate_nav_basic(overwrite=True)
+                    print(f"[RENAME] Regenerated navigation for first spine document")
+                except Exception as e:
+                    print(f"[WARNING] Could not regenerate navigation: {e}")
 
     def batch_rename_items(self, renames: list[tuple[str, str]], update_references: bool = False) -> dict[str, str]:
         """
@@ -872,13 +954,23 @@ class GutenCore:
             title = self._extract_title_from_xhtml(mi.href) or Path(mi.href).stem
             rel = Path(mi.href).name  # nav suele vivir junto a Text, referenciamos por nombre corto
             ol_items.append(f"<li><a href=\"{rel}\">{title}</a></li>")
-        ol_html = "\n      ".join(ol_items) or "<li><a href=\"chap1.xhtml\">Inicio</a></li>"
+        # Si no hay elementos, usar el primer documento del spine como fallback
+        if not ol_items:
+            spine_items = self.get_spine()
+            if spine_items:
+                first_doc_id = spine_items[0]
+                first_doc = self.items_by_id.get(first_doc_id)
+                if first_doc:
+                    first_doc_name = Path(first_doc.href).name
+                    ol_items.append(f"<li><a href=\"{first_doc_name}\">Inicio</a></li>")
+
+        ol_html = "\n      ".join(ol_items) or "<li>Sin documentos</li>"
 
         text_dir = Path(self.layout["TEXT"]).name
         nav_href = f"{text_dir}/nav.xhtml"
         nav_xhtml = f"""<?xml version='1.0' encoding='UTF-8'?>
 <!DOCTYPE html>
-<html xmlns=\"{NS['xhtml']}\" lang=\"es\" xml:lang=\"es\">
+<html xmlns=\"{NS['xhtml']}\" xmlns:epub=\"http://www.idpf.org/2007/ops\" lang=\"es\" xml:lang=\"es\">
 <head><title>Índice</title><meta charset=\"utf-8\"/></head>
 <body>
   <nav epub:type=\"toc\" id=\"toc\"><ol>
@@ -971,7 +1063,7 @@ class GutenCore:
         nav_href: str | None = None,
         overwrite: bool = True,
         epub_version: int = 3,             # 3 => NAV (XHTML5); 2 => (futuro) NCX
-        default_on_empty: str = "chap1.xhtml",
+        default_on_empty: str = "",  # Se calculará dinámicamente
         lang: str = "es",
     ) -> str:
         """
@@ -1019,7 +1111,19 @@ class GutenCore:
 
         # Si vacío, meter un link mínimo
         if not chapter_blocks:
-            chapter_blocks = [f'<li><a href="{html.escape(default_on_empty, True)}">Inicio</a></li>']
+            # Calcular dinámicamente el primer documento si no se especifica default_on_empty
+            if not default_on_empty:
+                spine_items = self.get_spine()
+                if spine_items:
+                    first_doc_id = spine_items[0]
+                    first_doc = self.items_by_id.get(first_doc_id)
+                    if first_doc:
+                        default_on_empty = Path(first_doc.href).name
+
+            if default_on_empty:
+                chapter_blocks = [f'<li><a href="{html.escape(default_on_empty, True)}">Inicio</a></li>']
+            else:
+                chapter_blocks = ['<li>Sin documentos</li>']
 
         # Plantilla EPUB3 (XHTML5 serializado)
         nav_xhtml = f"""<?xml version="1.0" encoding="UTF-8"?>

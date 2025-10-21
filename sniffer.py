@@ -156,7 +156,6 @@ def debug_gtksource_buffer(source_buffer):
     """Detecta si GtkSource está auto-guardando"""
     
     # Verificar propiedades del buffer
-    print("GtkSource Buffer properties:")
     for attr in dir(source_buffer):
         if 'save' in attr.lower() or 'auto' in attr.lower():
             try:

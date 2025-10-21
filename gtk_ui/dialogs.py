@@ -600,10 +600,11 @@ p {
         content_box.append(entry)
         content_box.append(validation_label)
         
-        # Checkbox para actualizar referencias
+        # Checkbox para actualizar referencias (siempre activado)
         update_refs_check = Gtk.CheckButton()
-        update_refs_check.set_label("Actualizar referencias en otros archivos")
+        update_refs_check.set_label("Actualizar referencias en otros archivos (automático)")
         update_refs_check.set_active(True)
+        update_refs_check.set_sensitive(False)  # Deshabilitado porque siempre está activo
         content_box.append(update_refs_check)
         
         dialog.set_extra_child(content_box)
@@ -622,33 +623,32 @@ p {
         
         dialog.present(self.main_window)
 
-    def _on_rename_response(self, dialog, response, href: str, entry: Gtk.Entry, 
+    def _on_rename_response(self, dialog, response, href: str, entry: Gtk.Entry,
                         update_refs_check: Gtk.CheckButton, old_name: str):
         """Maneja la respuesta del diálogo de renombrado"""
-        
+
         if response != "rename":
             return
-        
+
         new_name = entry.get_text().strip()
-        update_references = update_refs_check.get_active()
-        
+        # update_references = update_refs_check.get_active()  # Ya no se usa, siempre es True
+
         if not new_name:
             return
         
         try:
             # Renombrar usando el core mejorado
             new_href = self.main_window.core.rename_item(
-                href, 
-                new_name, 
-                update_references=update_references
+                href,
+                new_name,
+                update_references=True  # Siempre actualizar referencias
             )
             
             # Actualizar UI
             self.main_window.refresh_structure()
             
             # Mensaje de éxito
-            action_msg = "renombrado y referencias actualizadas" if update_references else "renombrado"
-            self.main_window.show_info(f"'{old_name}' {action_msg} como '{Path(new_href).name}'")
+            self.main_window.show_info(f"'{old_name}' renombrado como '{Path(new_href).name}' (referencias actualizadas)")
             
             # Si era el recurso actual, actualizar referencia
             if self.main_window.current_resource == href:

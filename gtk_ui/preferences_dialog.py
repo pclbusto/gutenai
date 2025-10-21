@@ -5,6 +5,7 @@ Configuración de API keys, editor y otras opciones
 
 from gi.repository import Gtk, Adw
 from typing import TYPE_CHECKING
+from pathlib import Path
 
 from .settings_manager import get_settings
 
@@ -115,7 +116,13 @@ class PreferencesDialog(Adw.PreferencesWindow):
 
         # Grupo de apariencia
         appearance_group = Adw.PreferencesGroup()
-        appearance_group.set_title("Apariencia")
+        if self.settings.current_project_path:
+            project_name = Path(self.settings.current_project_path).name
+            appearance_group.set_title(f"Apariencia (específica para '{project_name}')")
+            appearance_group.set_description("Esta configuración se guardará solo para este proyecto")
+        else:
+            appearance_group.set_title("Apariencia")
+            appearance_group.set_description("Configuración global del editor")
 
         # Tema del editor
         self.theme_row = Adw.ComboRow()
@@ -231,15 +238,15 @@ class PreferencesDialog(Adw.PreferencesWindow):
         # Configuración del editor
         editor_settings = self.settings.get_editor_settings()
 
-        # Tema
-        current_theme = editor_settings.get("theme", "Adwaita-dark")
+        # Tema (ahora usando configuración por proyecto)
+        current_theme = self.settings.get_project_setting("editor.theme", "Adwaita-dark")
         theme_names = ["Adwaita", "Adwaita-dark", "Classic", "Cobalt", "Kate", "Oblivion"]
         if current_theme in theme_names:
             self.theme_row.set_selected(theme_names.index(current_theme))
 
-        # Otros ajustes del editor
-        self.line_numbers_row.set_active(editor_settings.get("show_line_numbers", True))
-        self.word_wrap_row.set_active(editor_settings.get("word_wrap", True))
+        # Otros ajustes del editor (ahora usando configuración por proyecto)
+        self.line_numbers_row.set_active(self.settings.get_project_setting("editor.show_line_numbers", True))
+        self.word_wrap_row.set_active(self.settings.get_project_setting("editor.word_wrap", True))
         self.auto_save_row.set_active(editor_settings.get("auto_save", True))
         self.auto_save_delay_row.set_value(editor_settings.get("auto_save_delay", 1500))
 
@@ -278,18 +285,39 @@ class PreferencesDialog(Adw.PreferencesWindow):
         selected = combo.get_selected()
         themes = ["Adwaita", "Adwaita-dark", "Classic", "Cobalt", "Kate", "Oblivion"]
         if selected < len(themes):
-            self.settings.set("editor.theme", themes[selected])
-            self.settings.save_settings()
+            # Si hay un proyecto abierto, guardar como configuración específica del proyecto
+            if self.settings.current_project_path:
+                self.settings.set_project_setting("editor.theme", themes[selected])
+            else:
+                self.settings.set("editor.theme", themes[selected])
+                self.settings.save_settings()
+            # Actualizar el editor inmediatamente
+            if hasattr(self.parent_window, 'central_editor'):
+                self.parent_window.central_editor.update_editor_settings()
 
     def _on_line_numbers_changed(self, switch, param):
         """Callback para números de línea"""
-        self.settings.set("editor.show_line_numbers", switch.get_active())
-        self.settings.save_settings()
+        # Si hay un proyecto abierto, guardar como configuración específica del proyecto
+        if self.settings.current_project_path:
+            self.settings.set_project_setting("editor.show_line_numbers", switch.get_active())
+        else:
+            self.settings.set("editor.show_line_numbers", switch.get_active())
+            self.settings.save_settings()
+        # Actualizar el editor inmediatamente
+        if hasattr(self.parent_window, 'central_editor'):
+            self.parent_window.central_editor.update_editor_settings()
 
     def _on_word_wrap_changed(self, switch, param):
         """Callback para ajuste de línea"""
-        self.settings.set("editor.word_wrap", switch.get_active())
-        self.settings.save_settings()
+        # Si hay un proyecto abierto, guardar como configuración específica del proyecto
+        if self.settings.current_project_path:
+            self.settings.set_project_setting("editor.word_wrap", switch.get_active())
+        else:
+            self.settings.set("editor.word_wrap", switch.get_active())
+            self.settings.save_settings()
+        # Actualizar el editor inmediatamente
+        if hasattr(self.parent_window, 'central_editor'):
+            self.parent_window.central_editor.update_editor_settings()
 
     def _on_auto_save_changed(self, switch, param):
         """Callback para auto-guardado"""

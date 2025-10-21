@@ -269,6 +269,15 @@ class SidebarLeft:
             add_btn.add_css_class("flat")
             add_btn.connect('clicked', self._on_create_new_resource, category_type)
             buttons_box.append(add_btn)
+
+            # Para documentos, agregar también botón de importar HTML
+            if category_type == KIND_DOCUMENT:
+                import_btn = Gtk.Button()
+                import_btn.set_icon_name("folder-open-symbolic")
+                import_btn.set_tooltip_text("Importar archivos HTML existentes")
+                import_btn.add_css_class("flat")
+                import_btn.connect('clicked', self._on_import_html_files)
+                buttons_box.append(import_btn)
             
         elif category_type in [KIND_IMAGE, KIND_FONT, KIND_AUDIO, KIND_VIDEO]:
             import_btn = Gtk.Button()
@@ -301,12 +310,14 @@ class SidebarLeft:
         # Agregar fila informativa
         info_row = Adw.ActionRow()
         info_row.set_title("Sin elementos")
-        
-        if kind in [KIND_DOCUMENT, KIND_STYLE]:
+
+        if kind == KIND_DOCUMENT:
+            info_row.set_subtitle("Haz clic en + para crear un nuevo documento o en 📁 para importar HTML existente")
+        elif kind == KIND_STYLE:
             info_row.set_subtitle(f"Haz clic en + para crear un nuevo {category_name.split()[1].lower()}")
         elif kind in [KIND_IMAGE, KIND_FONT, KIND_AUDIO, KIND_VIDEO]:
             info_row.set_subtitle(f"Haz clic en 📁 para importar {category_name.split()[1].lower()}")
-        
+
         info_row.set_sensitive(False)
         category_row.add_row(info_row)
     
@@ -390,9 +401,152 @@ class SidebarLeft:
         if not self.main_window.core:
             self.main_window.show_error("No hay proyecto abierto")
             return
-        
+
         # Delegar al dialog manager
         self.main_window.dialog_manager.show_import_resource_dialog(resource_type)
+
+    def _on_import_html_files(self, button):
+        """Maneja la importación de archivos HTML existentes"""
+        if not self.main_window.core:
+            self.main_window.show_error("No hay proyecto abierto")
+            return
+
+        dialog = Gtk.FileDialog()
+        dialog.set_title("Importar archivos HTML")
+
+        # Filtro para archivos HTML
+        filter_html = Gtk.FileFilter()
+        filter_html.set_name("Archivos HTML/XHTML")
+        filter_html.add_pattern("*.html")
+        filter_html.add_pattern("*.htm")
+        filter_html.add_pattern("*.xhtml")
+
+        filters = Gio.ListStore()
+        filters.append(filter_html)
+        dialog.set_filters(filters)
+
+        # Permitir selección múltiple
+        dialog.open_multiple(self.main_window, None, self._on_import_html_response)
+
+    def _on_import_html_response(self, dialog, result):
+        """Maneja la respuesta del diálogo de importación HTML"""
+        try:
+            files = dialog.open_multiple_finish(result)
+            if not files:
+                return
+
+            imported_count = 0
+            errors = []
+            imported_ids = []  # Para tracking de documentos importados
+
+            for i in range(files.get_n_items()):
+                file = files.get_item(i)
+                source_path = Path(file.get_path())
+
+                try:
+                    # Leer contenido del archivo
+                    content = source_path.read_text(encoding='utf-8')
+
+                    # Generar un nombre único para el archivo en el proyecto
+                    base_name = source_path.stem
+                    extension = '.xhtml'  # Normalizar a XHTML
+                    counter = 1
+                    filename = f"{base_name}{extension}"
+
+                    # Verificar si ya existe y generar nombre único
+                    text_dir = self.main_window.core.layout["TEXT"]
+                    while (self.main_window.core.opf_dir / text_dir / filename).exists():
+                        filename = f"{base_name}_{counter}{extension}"
+                        counter += 1
+
+                    # Convertir HTML a XHTML válido si es necesario
+                    content = self._convert_to_valid_xhtml(content, source_path.name)
+
+                    # Agregar al proyecto
+                    href = f"{Path(text_dir).name}/{filename}"
+                    doc_id = filename.replace('.xhtml', '')
+
+                    # Escribir archivo
+                    self.main_window.core.write_text(href, content)
+
+                    # Agregar al manifest
+                    self.main_window.core.add_to_manifest(
+                        doc_id,
+                        href,
+                        media_type="application/xhtml+xml"
+                    )
+
+                    # Agregar al spine
+                    self.main_window.core.spine_insert(doc_id)
+                    imported_ids.append(doc_id)
+
+                    imported_count += 1
+                    print(f"[IMPORT] Added {filename} to manifest and spine with ID: {doc_id}")
+
+                except Exception as e:
+                    errors.append(f"{source_path.name}: {str(e)}")
+
+            # Actualizar UI
+            self.main_window.refresh_structure()
+
+            # Regenerar navegación si se importaron documentos
+            if imported_count > 0:
+                try:
+                    self.main_window.core.generate_nav_basic(overwrite=True)
+                    print(f"[IMPORT] Regenerated navigation after importing {imported_count} documents")
+                except Exception as e:
+                    print(f"[WARNING] Could not regenerate navigation: {e}")
+
+            # Mostrar resultados
+            if imported_count > 0:
+                message = f"Se importaron {imported_count} archivo(s) HTML exitosamente"
+                if len(imported_ids) > 1:
+                    message += f"\nSe actualizó la navegación automáticamente"
+                if errors:
+                    message += f"\n\nErrores en {len(errors)} archivo(s):\n" + "\n".join(errors[:5])
+                    if len(errors) > 5:
+                        message += f"\n... y {len(errors) - 5} error(es) más"
+                self.main_window.show_info(message)
+            else:
+                error_msg = "No se pudo importar ningún archivo"
+                if errors:
+                    error_msg += ":\n" + "\n".join(errors[:3])
+                self.main_window.show_error(error_msg)
+
+        except Exception as e:
+            self.main_window.show_error(f"Error importando archivos HTML: {e}")
+
+    def _convert_to_valid_xhtml(self, content: str, filename: str) -> str:
+        """Convierte contenido HTML a XHTML válido"""
+        # Si ya tiene declaración XML, dejarlo como está
+        if content.strip().startswith('<?xml'):
+            return content
+
+        # Si es HTML completo, convertir a XHTML
+        if '<html' in content.lower():
+            # Básico: agregar namespace XHTML si no lo tiene
+            if 'xmlns=' not in content:
+                content = content.replace('<html', '<html xmlns="http://www.w3.org/1999/xhtml"')
+
+            # Agregar declaración XML si no la tiene
+            if not content.strip().startswith('<?xml'):
+                content = '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE html>\n' + content
+        else:
+            # Es un fragmento, crear documento XHTML completo
+            title = Path(filename).stem.replace('_', ' ').title()
+            content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es" xml:lang="es">
+<head>
+    <title>{title}</title>
+    <meta charset="utf-8"/>
+</head>
+<body>
+{content}
+</body>
+</html>'''
+
+        return content
     
     def _on_checkbox_toggled(self, checkbox, href, resource_type):
         """Maneja el toggle de checkboxes individuales"""

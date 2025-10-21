@@ -1,17 +1,9 @@
-# Welcome to MkDocs
+# Documentación de GutenAI
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+Bienvenido a la documentación central de GutenAI. Aquí encontrarás recursos pensados para usuarios finales y colaboradores técnicos. Usa el índice para navegar:
 
-## Commands
+- [Guía de Usuario](usuario/guia.md): primeros pasos, flujo de trabajo y resolución de problemas.
+- [Referencia Técnica](referencia/manual.md): comandos, dependencias y módulos clave para desarrollo.
+- [Descripción de Arquitectura](arquitectura/overview.md): diseño de alto nivel, componentes y decisiones.
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
-
-## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+Las capturas de pantalla y diagramas residen en `assets/<sección>/`. Al agregar nuevos recursos visuales, guarda los archivos ahí y enlázalos con rutas relativas (por ejemplo, `![Editor](../assets/usuario/pantalla-editor-html.png)`).

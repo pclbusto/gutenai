@@ -11,10 +11,11 @@ from typing import Optional
 
 # Importar componentes
 from .sidebar_left import SidebarLeft
-from .sidebar_right import SidebarRight  
+from .sidebar_right import SidebarRight
 from .central_editor import CentralEditor
 from .actions import ActionManager
 from .dialogs import DialogManager
+from .about_dialog import AboutDialog
 
 # Importar core
 from core.guten_core import GutenCore
@@ -30,7 +31,7 @@ class GutenAIWindow(Adw.ApplicationWindow):
         
         # Configuración básica
         self.set_default_size(1400, 900)
-        self.set_title("Guten.AI - EPUB Editor")
+        self.set_title("GutenAI - EPUB Editor")
         
         # Establecer ícono si está disponible
         try:
@@ -53,7 +54,10 @@ class GutenAIWindow(Adw.ApplicationWindow):
         # Gestores de funcionalidad
         self.action_manager = ActionManager(self)
         self.dialog_manager = DialogManager(self)
-        
+
+        # Diálogo About
+        self.about_dialog = AboutDialog(self)
+
         # Componentes de interfaz
         self.sidebar_left = SidebarLeft(self)
         self.sidebar_right = SidebarRight(self)
@@ -143,11 +147,22 @@ class GutenAIWindow(Adw.ApplicationWindow):
         file_section.append("Exportar EPUB", "win.export_epub")
         file_section.append("Exportar a texto", "win.export_text")
         menu.append_section(None, file_section)
-        
+
+        # Sección de herramientas
+        tools_section = Gio.Menu()
+        tools_section.append("Buscar en documento", "win.search_in_document")
+        tools_section.append("Validar EPUB", "win.validate_epub")
+        menu.append_section(None, tools_section)
+
         # Sección de configuración
         config_section = Gio.Menu()
         config_section.append("Preferencias", "win.preferences")
         menu.append_section(None, config_section)
+
+        # Sección de ayuda
+        help_section = Gio.Menu()
+        help_section.append("Acerca de", "win.about")
+        menu.append_section(None, help_section)
         
         return menu
     
@@ -225,47 +240,33 @@ class GutenAIWindow(Adw.ApplicationWindow):
 
 class GutenAIApplication(Adw.Application):
     def __init__(self):
-        super().__init__(application_id="com.example.gutenai")
-                
-        # *** CONFIGURACIÓN PARA GNOME ***
-        self.set_resource_base_path("/com/example/gutenai")
-        
-        # Configurar propiedades de la aplicación
-        try:
-            # Establecer nombre de clase para window manager
-            import gi
-            gi.require_version('Gdk', '4.0')
-            from gi.repository import Gdk
-            
-            # Esto ayuda a GNOME a identificar la aplicación
-            display = Gdk.Display.get_default()
-            if display:
-                display.set_cursor_theme("default", 24)
-                
-        except Exception as e:
-            print(f"[WARNING] Could not set display properties: {e}")
-        
+        super().__init__(application_id="com.gutenai.editor")
+
+        # Configuración básica de la aplicación
+        self.set_flags(Gio.ApplicationFlags.DEFAULT_FLAGS)
+
+        # Conectar signals en el orden correcto
+        self.connect('startup', self._on_startup)
         self.connect('activate', self._on_activate)
+
+    def _on_startup(self, app):
+        """Inicialización de la aplicación"""
+        # Aquí es donde se pueden configurar acciones globales, menús, etc.
+        pass
     
     def _on_activate(self, app):
         """Crea la ventana principal"""
+        
         win = GutenAIWindow(application=app)
-                # *** CONFIGURAR PROPIEDADES DE VENTANA PARA GNOME ***
-        win.set_title("Guten.AI")
-        
-        # Establecer clase de ventana (importante para GNOME)
-        try:
-            # Esto es lo más importante para que GNOME reconozca la app
-            win.set_wmclass("gutenai", "gutenai")
-        except:
-            pass
-        
-        # Establecer ícono de ventana si está disponible
+
+        # *** CONFIGURAR PROPIEDADES DE VENTANA PARA GNOME ***
+        win.set_title("GutenAI")
+
+        # Configuración simple sin métodos problemáticos de GTK3
+        # Solo establecer ícono si está disponible
         try:
             win.set_icon_name("gutenai")
         except:
-            try:
-                win.set_default_icon_name("gutenai")
-            except:
-                pass
+            # Ignorar si no hay ícono disponible
+            pass
         win.present()

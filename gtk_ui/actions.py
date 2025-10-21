@@ -51,6 +51,11 @@ class ActionManager:
         prefs_action = Gio.SimpleAction.new("preferences", None)
         prefs_action.connect("activate", self._on_preferences)
         self.main_window.add_action(prefs_action)
+
+        # Acerca de
+        about_action = Gio.SimpleAction.new("about", None)
+        about_action.connect("activate", self._on_about)
+        self.main_window.add_action(about_action)
         
         # Acción para generar NAV
         gen_nav_action = Gio.SimpleAction.new("generate_nav", None)
@@ -86,7 +91,25 @@ class ActionManager:
         delete_action = Gio.SimpleAction.new("delete_resource", None)
         delete_action.connect("activate", self._on_delete_resource)
         self.main_window.add_action(delete_action)
-        
+
+        # Validación EPUB con epubcheck
+        validate_epub_action = Gio.SimpleAction.new("validate_epub", None)
+        validate_epub_action.connect("activate", self._on_validate_epub)
+        self.main_window.add_action(validate_epub_action)
+
+        # Acciones de búsqueda en documento
+        search_action = Gio.SimpleAction.new("search_in_document", None)
+        search_action.connect("activate", self._on_search_in_document)
+        self.main_window.add_action(search_action)
+
+        search_next_action = Gio.SimpleAction.new("search_next", None)
+        search_next_action.connect("activate", self._on_search_next)
+        self.main_window.add_action(search_next_action)
+
+        search_prev_action = Gio.SimpleAction.new("search_prev", None)
+        search_prev_action.connect("activate", self._on_search_prev)
+        self.main_window.add_action(search_prev_action)
+
         # *** CONFIGURAR ATAJOS DE TECLADO ***
         self._setup_keyboard_shortcuts()
     
@@ -107,6 +130,9 @@ class ActionManager:
         app.set_accels_for_action("win.wrap_h2", ["<Ctrl>2"])
         app.set_accels_for_action("win.wrap_h3", ["<Ctrl>3"])
         app.set_accels_for_action("win.wrap_blockquote", ["<Ctrl><Shift>q"])
+        app.set_accels_for_action("win.wrap_unordered_list", ["<Ctrl><Alt>u"])
+        app.set_accels_for_action("win.wrap_ordered_list", ["<Ctrl><Alt>o"])
+        app.set_accels_for_action("win.wrap_list_item", ["<Ctrl><Shift>i"])
         app.set_accels_for_action("win.link_styles", ["<Ctrl>l"])
         
         # Atajos de navegación
@@ -118,9 +144,10 @@ class ActionManager:
         # Atajos de ayuda
         app.set_accels_for_action("win.show_shortcuts", ["F1"])  # Solo F1 por ahora
         app.set_accels_for_action("win.preferences", ["<Ctrl><Shift>p"])
+        app.set_accels_for_action("win.validate_epub", ["<Ctrl><Shift>v"])
 
         # Atajos de IA (cambiado para evitar conflicto)
-        app.set_accels_for_action("win.ai_correction", ["<Ctrl><Shift>f7"])
+        app.set_accels_for_action("win.ai_correction", ["<Ctrl><Shift>F7"])
 
         # Atajos de recursos (sin conflictos)
         app.set_accels_for_action("win.create_document", ["<Ctrl><Shift>n"])
@@ -129,6 +156,11 @@ class ActionManager:
         app.set_accels_for_action("win.import_font", ["<Ctrl><Shift>t"])  # Cambiado de F a T
         app.set_accels_for_action("win.rename_resource", ["F2"])  # Renombrar recurso seleccionado
         app.set_accels_for_action("win.delete_resource", ["<Ctrl>Delete"])  # Eliminar recurso seleccionado
+
+        # Atajos de búsqueda
+        app.set_accels_for_action("win.search_in_document", ["<Ctrl>f"])
+        app.set_accels_for_action("win.search_next", ["F3"])
+        app.set_accels_for_action("win.search_prev", ["<Shift>F3"])
 
         # Crear acciones para toggles de sidebar
         left_toggle_action = Gio.SimpleAction.new("toggle_left_sidebar", None)
@@ -252,7 +284,7 @@ class ActionManager:
         """Crea un nuevo proyecto EPUB"""
         
         dialog = Gtk.FileDialog()
-        dialog.set_title("Crear nuevo proyecto EPUB - Selecciona carpeta contenedora")
+        dialog.set_title("Crear nuevo proyecto EPUB - Selecciona carpeta del proyecto")
         dialog.select_folder(self.main_window, None, self._on_new_project_response)
     
     def _on_new_project_response(self, dialog, result):
@@ -260,27 +292,28 @@ class ActionManager:
         try:
             folder = dialog.select_folder_finish(result)
             if folder:
-                parent_dir = Path(folder.get_path())
-                project_dir = parent_dir / "NuevoEPUB"
-                
-                # Verificar que el directorio de destino no exista
-                if project_dir.exists():
+                project_dir = Path(folder.get_path())
+
+                # Verificar que la carpeta esté vacía o solo tenga archivos ocultos
+                existing_files = [f for f in project_dir.iterdir() if not f.name.startswith('.')]
+                if existing_files:
                     self.main_window.show_error(
-                        f"Ya existe una carpeta '{project_dir.name}' en la ubicación seleccionada"
+                        f"La carpeta '{project_dir.name}' no está vacía. "
+                        "Selecciona una carpeta vacía para crear el proyecto EPUB."
                     )
                     return
-                
-                # Crear proyecto usando el core
+
+                # Crear proyecto usando el core directamente en la carpeta seleccionada
                 self.main_window.core = GutenCore.new_project(
                     project_dir,
                     title="Nuevo Libro",
                     lang="es"
                 )
-                
+
                 # Actualizar UI
                 self._update_ui_after_open()
                 self.main_window.show_info(f"Nuevo proyecto creado en '{project_dir}'")
-                
+
         except Exception as e:
             self.main_window.show_error(f"Error creando proyecto: {e}")
     
@@ -288,22 +321,31 @@ class ActionManager:
         """Actualiza la UI después de abrir un proyecto"""
         if not self.main_window.core:
             return
-        
+
+        # Configurar settings para el proyecto actual
+        from .settings_manager import get_settings
+        settings = get_settings()
+        project_path = str(self.main_window.core.workdir)
+        settings.set_current_project(project_path)
+
         # Actualizar título del libro
         metadata = self.main_window.core.get_metadata()
         book_title = metadata.get("title", "EPUB sin título")
         if not book_title or book_title == "EPUB sin título":
             book_title = self.main_window.core.workdir.name
-        
+
         self.main_window.update_book_title(book_title)
-        
+
         # Refrescar estructura en sidebar izquierdo
         self.main_window.refresh_structure()
-        
+
         # Limpiar editor y previsualización
         self.main_window.central_editor.set_text("")
         self.main_window.sidebar_right.web_view.load_html("", None)
-        
+
+        # Actualizar configuración del editor con la específica del proyecto
+        self.main_window.central_editor.update_editor_settings()
+
         # Resetear recurso actual
         self.main_window.current_resource = None
         self.main_window.resource_title.set_text("Ningún recurso seleccionado")
@@ -399,7 +441,11 @@ class ActionManager:
         """Muestra el diálogo de preferencias"""
         from .preferences_dialog import show_preferences_dialog
         show_preferences_dialog(self.main_window)
-    
+
+    def _on_about(self, action, param):
+        """Muestra el diálogo About"""
+        self.main_window.about_dialog.show()
+
     def close_current_project(self):
         """Cierra el proyecto actual"""
         if self.main_window.core:
@@ -498,8 +544,8 @@ class ActionManager:
             file = dialog.open_finish(result)
             if file:
                 file_path = file.get_path()
-                # TODO: Implementar importación de imagen al proyecto
-                self.main_window.show_info(f"Importar imagen: {file_path}")
+                # La importación de imágenes se maneja desde el sidebar
+                self.main_window.show_info(f"Use el sidebar para importar imágenes: {file_path}")
         except Exception as e:
             if "dismissed" not in str(e).lower():
                 print(f"Error seleccionando imagen: {e}")
@@ -537,10 +583,9 @@ class ActionManager:
             self.main_window.show_error("No hay recurso seleccionado")
             return
 
-        # TODO: Implementar eliminación de recurso con confirmación
-        # Por ahora solo mostramos mensaje
+        # La eliminación de recursos se maneja desde el sidebar con confirmación
         resource_name = self.main_window.current_resource
-        self.main_window.show_info(f"Eliminar recurso: {resource_name}")
+        self.main_window.show_info(f"Use el menú contextual del sidebar para eliminar: {resource_name}")
 
     def _on_export_text(self, action, param):
         """Muestra el diálogo de exportación a texto"""
@@ -550,3 +595,59 @@ class ActionManager:
 
         # Delegar al dialog manager
         self.main_window.dialog_manager.show_export_text_dialog()
+
+    def _on_validate_epub(self, action, param):
+        """Muestra el diálogo de validación EPUB"""
+        if not self.main_window.core:
+            # Si no hay proyecto abierto, permitir validar archivo externo
+            from .epubcheck_dialog import show_epubcheck_dialog
+            show_epubcheck_dialog(self.main_window)
+            return
+
+        # Si hay proyecto abierto, validar el EPUB exportado
+        try:
+            # Crear EPUB temporal para validar
+            import tempfile
+            from pathlib import Path
+
+            with tempfile.NamedTemporaryFile(suffix='.epub', delete=False) as temp_file:
+                temp_path = Path(temp_file.name)
+
+            # Exportar temporalmente
+            self.main_window.core.export_epub(temp_path, include_unreferenced=False)
+
+            # Mostrar diálogo con el archivo temporal
+            from .epubcheck_dialog import show_epubcheck_dialog
+            dialog = show_epubcheck_dialog(self.main_window, temp_path)
+
+            # Limpiar archivo temporal cuando se cierre el diálogo
+            def cleanup_temp_file():
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except:
+                    pass
+
+            dialog.connect("destroy", lambda w: cleanup_temp_file())
+
+        except Exception as e:
+            self.main_window.show_error(f"Error validando EPUB: {e}")
+            # En caso de error, mostrar diálogo normal
+            from .epubcheck_dialog import show_epubcheck_dialog
+            show_epubcheck_dialog(self.main_window)
+
+    def _on_search_in_document(self, action, param):
+        """Maneja la acción de búsqueda en documento"""
+        if hasattr(self.main_window, 'central_editor'):
+            self.main_window.central_editor.toggle_search_panel()
+        else:
+            self.main_window.show_info("No hay editor activo")
+
+    def _on_search_next(self, action, param):
+        """Maneja la acción de siguiente resultado de búsqueda"""
+        if hasattr(self.main_window, 'central_editor'):
+            self.main_window.central_editor._on_search_next()
+
+    def _on_search_prev(self, action, param):
+        """Maneja la acción de resultado anterior de búsqueda"""
+        if hasattr(self.main_window, 'central_editor'):
+            self.main_window.central_editor._on_search_prev()

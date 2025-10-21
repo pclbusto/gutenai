@@ -214,7 +214,7 @@ class CentralEditor:
         self.source_buffer.set_modified(False)  # Reset flag modificado
         
         # Verificar si hay propiedades de auto-save
-        print("Buffer properties:", dir(self.source_buffer))
+        
         
         # Desactivar cualquier auto-guardado interno si existe
         if hasattr(self.source_buffer, 'set_auto_save'):

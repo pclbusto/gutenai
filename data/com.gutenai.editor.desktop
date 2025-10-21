@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=GutenAI
+GenericName=EPUB Editor
+Comment=Modern EPUB editor with AI-powered text correction
+Exec=python3 /home/pedro/PycharmProjects/gutenai/main.py
+Icon=com.gutenai.editor
+Terminal=false
+Type=Application
+Categories=Office;Publishing;
+Keywords=epub;ebook;editor;publishing;
+StartupNotify=true
+StartupWMClass=GutenAI
