@@ -1,11 +1,12 @@
-# Documentación de GutenAI
+# Documentaci��n de GutenAI
 
-![Portada GutenAI](usuario/guia_usuario.png)
+![Portada GutenAI](assets/usuario/guia_usuario.png)
 
-Bienvenido a la documentación central de GutenAI. Aquí encontrarás recursos pensados para usuarios finales y colaboradores técnicos. Usa el índice para navegar:
+Bienvenido a la documentaci��n central de GutenAI. Aqu�� encontrarǭs recursos pensados para usuarios finales y colaboradores tǸcnicos. Usa el ��ndice para navegar:
 
-- [Guía de Usuario](usuario/instalacion.md): primeros pasos, flujo de trabajo y resolución de problemas.
-- [Referencia Técnica](referencia/manual.md): comandos, dependencias y módulos clave para desarrollo.
-- [Descripción de Arquitectura](arquitectura/overview.md): diseño de alto nivel, componentes y decisiones.
+- [Gu��a de Usuario](usuario/instalacion.md): primeros pasos, flujo de trabajo y resoluci��n de problemas.
+- [Referencia TǸcnica](referencia/manual.md): comandos, dependencias y m��dulos clave para desarrollo.
+- [Descripci��n de Arquitectura](arquitectura/overview.md): dise��o de alto nivel, componentes y decisiones.
 
-Las capturas de pantalla y diagramas residen en `assets/<sección>/`. Al agregar nuevos recursos visuales, guarda los archivos ahí y enlázalos con rutas relativas (por ejemplo, `![Editor](../assets/usuario/pantalla-editor-html.png)`).
+Las capturas de pantalla y diagramas residen en `assets/<secci��n>/`. Al agregar nuevos recursos visuales, guarda los archivos ah�� y enlǭzalos con rutas relativas (por ejemplo, `![Editor](assets/usuario/pantalla-editor-html.png)`).
+
