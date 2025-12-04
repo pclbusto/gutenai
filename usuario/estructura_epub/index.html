@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../../img/favicon.ico">
+        <title>Estructura del EPUB - GutenAI Documentación</title>
+        <link href="../../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../../css/fontawesome.min.css" rel="stylesheet">
+        <link href="../../css/brands.min.css" rel="stylesheet">
+        <link href="../../css/solid.min.css" rel="stylesheet">
+        <link href="../../css/v4-font-face.min.css" rel="stylesheet">
+        <link href="../../css/base.css" rel="stylesheet">
+        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" >
+        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css" disabled>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="../..">GutenAI Documentación</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar-collapse" aria-controls="navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="nav-item">
+                                <a href="../.." class="nav-link">Inicio</a>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle active" aria-current="page" role="button" data-bs-toggle="dropdown"  aria-expanded="false">Guía de Usuario</a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../instalacion/" class="dropdown-item">Instalación</a>
+</li>
+                                    
+<li>
+    <a href="../interfaz/" class="dropdown-item">Interfaz</a>
+</li>
+                                    
+<li>
+    <a href="../proyectos/" class="dropdown-item">Gestión de Proyectos</a>
+</li>
+                                    
+<li>
+    <a href="../flujo/" class="dropdown-item">Flujo de Trabajo</a>
+</li>
+                                    
+<li>
+    <a href="../troubleshooting/" class="dropdown-item">Solución de Problemas</a>
+</li>
+                                    
+<li>
+    <a href="../atajos/" class="dropdown-item">Atajos de Teclado</a>
+</li>
+                                    
+<li>
+    <a href="./" class="dropdown-item active" aria-current="page">Estructura del EPUB</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown"  aria-expanded="false">Referencia Técnica</a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../../referencia/manual/" class="dropdown-item">Manual del Desarrollador</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown"  aria-expanded="false">Arquitectura</a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../../arquitectura/overview/" class="dropdown-item">Visión General</a>
+</li>
+                                </ul>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ms-md-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-bs-toggle="modal" data-bs-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" href="../atajos/" class="nav-link">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" href="../../referencia/manual/" class="nav-link">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-bs-toggle="collapse" data-bs-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-body-tertiary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-bs-level="1"><a href="#estructura-del-epub" class="nav-link">Estructura del EPUB</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-bs-level="2"><a href="#seccion-texto" class="nav-link">Sección: Texto</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#renombrar-recursos" class="nav-link">Renombrar recursos</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="estructura-del-epub">Estructura del EPUB<a class="headerlink" href="#estructura-del-epub" title="Permanent link">&para;</a></h1>
+<p>El panel lateral izquierdo (sidebar) muestra la estructura completa del EPUB con el que estás trabajando.
+Desde allí podés acceder rápidamente a todos los recursos del libro.</p>
+<p>Las secciones visibles son:
+- <strong>Texto</strong>
+- <strong>Estilos</strong>
+- <strong>Imágenes</strong>
+- <strong>Fuentes</strong>
+- <strong>Audio</strong>
+- <strong>Video</strong>
+- <strong>Metadata</strong></p>
+<p>Podés ocultar o mostrar este panel para ganar más espacio de trabajo en el área central.
+El atajo de teclado para alternar su visibilidad es <code>F9</code>.</p>
+<h2 id="seccion-texto">Sección: Texto<a class="headerlink" href="#seccion-texto" title="Permanent link">&para;</a></h2>
+<p>La categoría <strong>Texto</strong> agrupa todos los capítulos en formato XHTML, que conforman el contenido principal del libro.</p>
+<blockquote>
+<p><strong>Importante sobre el Orden de Lectura (Spine)</strong>:
+El orden en el que ves los archivos listados en esta sección es <strong>el orden real de lectura</strong> del libro (lo que técnicamente se conoce como <em>Spine</em>).</p>
+<p>Si cambias el orden de los archivos aquí, cambiará el orden en el que aparecen las páginas al leer el EPUB.</p>
+</blockquote>
+<p>En el encabezado de esta sección vas a encontrar varios íconos que permiten realizar acciones rápidas:</p>
+<h3 id="1-crear-nuevo-html">📄 1. Crear nuevo HTML<a class="headerlink" href="#1-crear-nuevo-html" title="Permanent link">&para;</a></h3>
+<p><strong>Icono</strong>: un papel (new file)</p>
+<p>Crea un nuevo archivo XHTML dentro del proyecto. Ideal para agregar capítulos, secciones o páginas adicionales.</p>
+<h3 id="2-importar-html">📁 2. Importar HTML<a class="headerlink" href="#2-importar-html" title="Permanent link">&para;</a></h3>
+<p><strong>Icono</strong>: carpeta (import)</p>
+<p>Permite traer archivos HTML/XHTML que ya tengas creados fuera del proyecto.
+Por ejemplo, si escribiste capítulos en otro editor y querés integrarlos a Guten.AI, esta es la forma correcta de hacerlo.</p>
+<h3 id="3-menu-de-acciones">⋮ 3. Menú de acciones<a class="headerlink" href="#3-menu-de-acciones" title="Permanent link">&para;</a></h3>
+<p><strong>Icono</strong>: tres puntitos</p>
+<p>Este menú ofrece operaciones avanzadas sobre los archivos de texto:</p>
+<ul>
+<li><strong>Seleccionar todo</strong>: selecciona todos los capítulos de la categoría.</li>
+<li><strong>Agregar a la spine</strong>: si algún archivo no está incluido en la secuencia de lectura, podés incorporarlo.</li>
+<li><strong>Quitar de la spine</strong>: elimina el capítulo de la secuencia de lectura sin borrarlo del proyecto.</li>
+<li><strong>Vincular estilos</strong>: permite asociar hojas de estilo CSS a uno o varios archivos XHTML.<ul>
+<li><em>Nota</em>: Al seleccionar esta opción, se abre una ventana con todos los estilos disponibles en el EPUB. Allí podés marcar cuáles querés vincular a los capítulos seleccionados, o desmarcar para eliminar vínculos existentes.</li>
+</ul>
+</li>
+<li><strong>Eliminar</strong>: quita definitivamente el archivo HTML del proyecto.</li>
+</ul>
+<h2 id="renombrar-recursos">Renombrar recursos<a class="headerlink" href="#renombrar-recursos" title="Permanent link">&para;</a></h2>
+<p>Podés cambiar nombres de archivos desde el panel de la izquierda. Hay dos modos:</p>
+<h3 id="renombrado-simple-un-archivo">Renombrado simple (un archivo)<a class="headerlink" href="#renombrado-simple-un-archivo" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Cómo acceder: clic derecho sobre el recurso y elegí «Renombrar», o presioná <code>F2</code>.</li>
+<li>Validación: la ventana avisa si el nombre ya existe para evitar conflictos.</li>
+<li>Alcance: actualiza el workspace y los metadatos del proyecto (manifest y spine). Si tu documento contiene enlaces internos entre capítulos, revisalos después del cambio.</li>
+</ul>
+<h3 id="renombrado-en-lote-de-capitulos">Renombrado en lote de capítulos<a class="headerlink" href="#renombrado-en-lote-de-capitulos" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Acceso rápido: <code>Ctrl+Shift+R</code> (ver <a href="../atajos/">Atajos de teclado</a>). También disponible desde el menú contextual de la sección <strong>Texto</strong>.</li>
+<li>Pensado para: capítulos XHTML de la categoría <strong>Texto</strong>. Para estilos, imágenes u otros recursos usá el renombrado simple.</li>
+<li>Configuración de la ventana:</li>
+<li>Prefijo fijo: parte del nombre que no cambia (por ej., <code>chap-</code>).</li>
+<li>Número inicial: define desde qué número arranca la secuencia (por ej., <code>1</code>).</li>
+<li>Número de dígitos: determina el relleno con ceros (por ej., <code>3</code> produce <code>001</code>, <code>002</code>, <code>003</code>).</li>
+<li>Vista previa de ejemplo: muestra cómo quedarían los nombres generados antes de aplicar.</li>
+<li>Archivos a renombrar: lista de capítulos dentro de <strong>Texto</strong> para elegir exactamente cuáles renombrar.</li>
+<li>Acciones de selección: «Seleccionar todo», «Deseleccionar todos» y «Desde actual» (si ya estás parado en un capítulo, aplica desde ese hacia adelante).</li>
+<li>Aplicar: botón «Aplicar renombrado» (arriba a la derecha) para ejecutar los cambios.</li>
+<li>Conflictos: si algún nombre destino ya existe, la herramienta lo indica y no aplica los cambios hasta que lo resuelvas.</li>
+</ul></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script src="../../js/bootstrap.bundle.min.js"></script>
+        <script>
+            var base_url = "../..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../../js/base.js"></script>
+        <script src="../../search/main.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        
+        
+        
+        <link rel="shortcut icon" href="../../img/favicon.ico">
+        <title>Manual del Desarrollador - GutenAI Documentación</title>
+        <link href="../../css/bootstrap.min.css" rel="stylesheet">
+        <link href="../../css/fontawesome.min.css" rel="stylesheet">
+        <link href="../../css/brands.min.css" rel="stylesheet">
+        <link href="../../css/solid.min.css" rel="stylesheet">
+        <link href="../../css/v4-font-face.min.css" rel="stylesheet">
+        <link href="../../css/base.css" rel="stylesheet">
+        <link id="hljs-light" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" >
+        <link id="hljs-dark" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark.min.css" disabled>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+        <script>hljs.highlightAll();</script> 
+    </head>
+
+    <body>
+        <div class="navbar fixed-top navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="../..">GutenAI Documentación</a>
+                <!-- Expander button -->
+                <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar-collapse" aria-controls="navbar-collapse" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Expanded navigation -->
+                <div id="navbar-collapse" class="navbar-collapse collapse">
+                        <!-- Main navigation -->
+                        <ul class="nav navbar-nav">
+                            <li class="nav-item">
+                                <a href="../.." class="nav-link">Inicio</a>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown"  aria-expanded="false">Guía de Usuario</a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../../usuario/instalacion/" class="dropdown-item">Instalación</a>
+</li>
+                                    
+<li>
+    <a href="../../usuario/interfaz/" class="dropdown-item">Interfaz</a>
+</li>
+                                    
+<li>
+    <a href="../../usuario/proyectos/" class="dropdown-item">Gestión de Proyectos</a>
+</li>
+                                    
+<li>
+    <a href="../../usuario/flujo/" class="dropdown-item">Flujo de Trabajo</a>
+</li>
+                                    
+<li>
+    <a href="../../usuario/troubleshooting/" class="dropdown-item">Solución de Problemas</a>
+</li>
+                                    
+<li>
+    <a href="../../usuario/atajos/" class="dropdown-item">Atajos de Teclado</a>
+</li>
+                                    
+<li>
+    <a href="../../usuario/estructura_epub/" class="dropdown-item">Estructura del EPUB</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle active" aria-current="page" role="button" data-bs-toggle="dropdown"  aria-expanded="false">Referencia Técnica</a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="./" class="dropdown-item active" aria-current="page">Manual del Desarrollador</a>
+</li>
+                                </ul>
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a href="#" class="nav-link dropdown-toggle" role="button" data-bs-toggle="dropdown"  aria-expanded="false">Arquitectura</a>
+                                <ul class="dropdown-menu">
+                                    
+<li>
+    <a href="../../arquitectura/overview/" class="dropdown-item">Visión General</a>
+</li>
+                                </ul>
+                            </li>
+                        </ul>
+
+                    <ul class="nav navbar-nav ms-md-auto">
+                        <li class="nav-item">
+                            <a href="#" class="nav-link" data-bs-toggle="modal" data-bs-target="#mkdocs_search_modal">
+                                <i class="fa fa-search"></i> Search
+                            </a>
+                        </li>
+                            <li class="nav-item">
+                                <a rel="prev" href="../../usuario/estructura_epub/" class="nav-link">
+                                    <i class="fa fa-arrow-left"></i> Previous
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a rel="next" href="../../arquitectura/overview/" class="nav-link">
+                                    Next <i class="fa fa-arrow-right"></i>
+                                </a>
+                            </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                    <div class="col-md-3"><div class="navbar-expand-md bs-sidebar hidden-print affix" role="complementary">
+    <div class="navbar-header">
+        <button type="button" class="navbar-toggler collapsed" data-bs-toggle="collapse" data-bs-target="#toc-collapse" title="Table of Contents">
+            <span class="fa fa-angle-down"></span>
+        </button>
+    </div>
+
+    
+    <div id="toc-collapse" class="navbar-collapse collapse card bg-body-tertiary">
+        <ul class="nav flex-column">
+            
+            <li class="nav-item" data-bs-level="1"><a href="#manual-de-referencia-tecnica" class="nav-link">Manual de Referencia Técnica</a>
+              <ul class="nav flex-column">
+            <li class="nav-item" data-bs-level="2"><a href="#estructura-del-proyecto" class="nav-link">Estructura del proyecto</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#configuracion-del-entorno" class="nav-link">Configuración del entorno</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#comandos-esenciales" class="nav-link">Comandos esenciales</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#apis-relevantes" class="nav-link">APIs relevantes</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#estandares-de-contribucion" class="nav-link">Estándares de contribución</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+            <li class="nav-item" data-bs-level="2"><a href="#recursos-adicionales" class="nav-link">Recursos adicionales</a>
+              <ul class="nav flex-column">
+              </ul>
+            </li>
+              </ul>
+            </li>
+        </ul>
+    </div>
+</div></div>
+                    <div class="col-md-9" role="main">
+
+<h1 id="manual-de-referencia-tecnica">Manual de Referencia Técnica<a class="headerlink" href="#manual-de-referencia-tecnica" title="Permanent link">&para;</a></h1>
+<h2 id="estructura-del-proyecto">Estructura del proyecto<a class="headerlink" href="#estructura-del-proyecto" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>main.py</code>: punto de entrada que inicializa <code>GutenAIApplication</code> desde <code>gtk_ui</code>.</li>
+<li><code>gtk_ui/</code>: widgets y controladores UI (<code>main_window.py</code>, <code>sidebar_left.py</code>, <code>central_editor.py</code>, acciones y diálogos).</li>
+<li><code>core/guten_core.py</code>: núcleo que gestiona el workspace EPUB, manifest y operaciones IO.</li>
+<li><code>utils/</code>: utilidades compartidas (transformaciones, helpers de archivos).</li>
+<li><code>data/</code> y <code>libros/</code>: recursos de ejemplo y EPUBs de prueba.</li>
+<li><code>tests/</code>: suite inicial con <code>unittest</code>; extiéndela paralelamente a los módulos que cubras.</li>
+</ul>
+<p>Guarda diagramas de dependencias en <code>docs/assets/referencia/diagrama-modulos.png</code> y referencia cuando describas la interacción entre capas.</p>
+<h2 id="configuracion-del-entorno">Configuración del entorno<a class="headerlink" href="#configuracion-del-entorno" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>python<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>.venv
+<span class="nb">source</span><span class="w"> </span>.venv/bin/activate
+pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
+</code></pre></div>
+
+<p>Dependencias clave:
+- <code>ebooklib</code>: empaquetado y lectura de EPUB.
+- <code>PyGObject</code> (GTK4 + libadwaita + WebKit2).
+- Opcionales: <code>watchdog</code> para reaccionar a cambios en disco, <code>Pillow</code> para <code>setup.py</code>.</p>
+<h2 id="comandos-esenciales">Comandos esenciales<a class="headerlink" href="#comandos-esenciales" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>python main.py</code>: ejecuta la aplicación (requiere entorno gráfico).</li>
+<li><code>./run_gutenai.sh</code>: wrapper que usa <code>.venv/bin/python</code> directamente.</li>
+<li><code>python setup.py</code>: genera e instala iconos PNG/SVG en el tema hicolor del usuario.</li>
+<li><code>python -m unittest discover tests</code>: ejecuta la suite completa.</li>
+<li><code>python -m core.guten_core</code>: ejecuta pruebas manuales sobre el núcleo (útil para depuración CLI).</li>
+</ul>
+<p>Incluye capturas de consola en <code>assets/referencia/</code> si quieres ilustrar salidas (<code>cli-ejecucion.png</code>).</p>
+<h2 id="apis-relevantes">APIs relevantes<a class="headerlink" href="#apis-relevantes" title="Permanent link">&para;</a></h2>
+<h3 id="gutencore"><code>GutenCore</code><a class="headerlink" href="#gutencore" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>new_project(layout=...)</code>: crea un workspace con estructura <code>OEBPS</code>.</li>
+<li><code>open_epub(path)</code>: abre un EPUB empaquetado.</li>
+<li><code>add_manifest_item(...)</code> / <code>remove_manifest_item(...)</code>: gestionan recursos del OPF.</li>
+<li><code>write()</code> y <code>export_epub(destino)</code>: persisten los cambios.</li>
+<li>Internamente mantiene cachés de manifest, spine y metadatos usando <code>xml.etree.ElementTree</code>.</li>
+</ul>
+<blockquote>
+<p>[!NOTE]
+Documenta cualquier método adicional que agregues y complementa con snippets colocados en bloques de código.</p>
+</blockquote>
+<h3 id="ui-gtk_ui">UI (<code>gtk_ui</code>)<a class="headerlink" href="#ui-gtk_ui" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>GutenAIWindow</code>: orquesta paneles y acciones.</li>
+<li><code>SidebarLeft</code>: muestra árbol de recursos; escucha señales para refrescar estructura.</li>
+<li><code>CentralEditor</code>: carga editores específicos según MIME.</li>
+<li><code>SidebarRight</code>: previsualiza recursos (HTML/imágenes).</li>
+<li><code>ActionManager</code> y <code>DialogManager</code>: encapsulan acciones y diálogos GTK.</li>
+</ul>
+<h2 id="estandares-de-contribucion">Estándares de contribución<a class="headerlink" href="#estandares-de-contribucion" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Sigue PEP 8 con cuatro espacios y <code>snake_case</code> para módulos.</li>
+<li>Añade type hints y docstrings en español.</li>
+<li>Divide commits por tema (core, UI, utilidades) y usa mensajes en presente.</li>
+<li>Ejecuta <code>python -m unittest</code> antes de abrir un PR y adjunta capturas o GIFs en cambios visuales.</li>
+</ul>
+<h2 id="recursos-adicionales">Recursos adicionales<a class="headerlink" href="#recursos-adicionales" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Guarda notas de depuración en <code>docs/assets/referencia/notas-debug.md</code> si necesitas ampliar.</li>
+<li>Actualiza <code>mkdocs.yml</code> cuando incorpores nueva documentación para mantener la navegación coherente.</li>
+</ul></div>
+            </div>
+        </div>
+
+        <footer class="col-md-12">
+            <hr>
+            <p>Documentation built with <a href="https://www.mkdocs.org/">MkDocs</a>.</p>
+        </footer>
+        <script src="../../js/bootstrap.bundle.min.js"></script>
+        <script>
+            var base_url = "../..",
+                shortcuts = {"help": 191, "next": 78, "previous": 80, "search": 83};
+        </script>
+        <script src="../../js/base.js"></script>
+        <script src="../../search/main.js"></script>
+
+        <div class="modal" id="mkdocs_search_modal" tabindex="-1" role="dialog" aria-labelledby="searchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="searchModalLabel">Search</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>From here you can search these documents. Enter your search terms below.</p>
+                <form>
+                    <div class="form-group">
+                        <input type="search" class="form-control" placeholder="Search..." id="mkdocs-search-query" title="Type search term here">
+                    </div>
+                </form>
+                <div id="mkdocs-search-results" data-no-results-text="No results found"></div>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div><div class="modal" id="mkdocs_keyboard_modal" tabindex="-1" role="dialog" aria-labelledby="keyboardModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title" id="keyboardModalLabel">Keyboard Shortcuts</h4>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th style="width: 20%;">Keys</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="help shortcut"><kbd>?</kbd></td>
+                    <td>Open this help</td>
+                  </tr>
+                  <tr>
+                    <td class="next shortcut"><kbd>n</kbd></td>
+                    <td>Next page</td>
+                  </tr>
+                  <tr>
+                    <td class="prev shortcut"><kbd>p</kbd></td>
+                    <td>Previous page</td>
+                  </tr>
+                  <tr>
+                    <td class="search shortcut"><kbd>s</kbd></td>
+                    <td>Search</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="modal-footer">
+            </div>
+        </div>
+    </div>
+</div>
+
+    </body>
+</html>
