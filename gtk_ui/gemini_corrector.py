@@ -14,13 +14,17 @@ try:
     from google import genai
     from google.genai import types
     HAS_GEMINI = True
-except ImportError:
+    print("[DEBUG] Gemini modules imported successfully")
+except ImportError as e:
     HAS_GEMINI = False
+    print(f"[ERROR] Failed to import Gemini modules: {e}")
 
 class GeminiCorrector:
     """Corrector inteligente usando Gemini 2.5 Flash con prompts deterministas"""
 
     def __init__(self, api_key: str, cache_dir: str = None):
+        print(f"[DEBUG GeminiCorrector] Inicializando con API key: {api_key[:10]}...")
+
         if not HAS_GEMINI:
             raise ImportError("pip install google-genai")
 
@@ -29,7 +33,12 @@ class GeminiCorrector:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         # Configurar cliente Gemini 2.5
-        self.client = genai.Client(api_key=api_key)
+        try:
+            self.client = genai.Client(api_key=api_key)
+            print("[DEBUG GeminiCorrector] Cliente Gemini creado exitosamente")
+        except Exception as e:
+            print(f"[ERROR GeminiCorrector] Error creando cliente Gemini: {e}")
+            raise
 
         # Contadores de uso
         self.consultas_realizadas = 0
@@ -287,9 +296,9 @@ RESPUESTA - SOLO JSON VÁLIDO:
         """Crea hash del texto para cache"""
         return hashlib.md5(texto.encode('utf-8')).hexdigest()
 
-    def _cargar_cache(self, hash_texto: str) -> Optional[dict]:
+    def _cargar_cache(self, hash_contenido: str) -> Optional[dict]:
         """Carga resultado del cache en disco"""
-        cache_file = self.cache_dir / f"{hash_texto}.json"
+        cache_file = self.cache_dir / f"{hash_contenido}.json"
         if cache_file.exists():
             try:
                 with open(cache_file, 'r', encoding='utf-8') as f:
@@ -298,9 +307,9 @@ RESPUESTA - SOLO JSON VÁLIDO:
                 pass
         return None
 
-    def _guardar_cache(self, hash_texto: str, resultado: dict):
+    def _guardar_cache(self, hash_contenido: str, resultado: dict):
         """Guarda resultado en cache en disco"""
-        cache_file = self.cache_dir / f"{hash_texto}.json"
+        cache_file = self.cache_dir / f"{hash_contenido}.json"
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(resultado, f, ensure_ascii=False, indent=2)
@@ -319,6 +328,155 @@ RESPUESTA - SOLO JSON VÁLIDO:
     def reset_contadores(self):
         """Resetea contadores (usar con timer cada hora)"""
         self.consultas_realizadas = 0
+
+    def procesar_con_prompt(self, texto: str, prompt_personalizado: str, idioma: str = "es") -> dict:
+        """
+        Procesa texto usando un prompt personalizado
+
+        Returns:
+            {
+                "texto_corregido": str,
+                "errores_encontrados": list,
+                "cambios_aplicados": int,
+                "fuente": "cache|gemini"
+            }
+        """
+        print(f"[DEBUG GeminiCorrector] Procesando con prompt: '{prompt_personalizado}'")
+        print(f"[DEBUG GeminiCorrector] Texto length: {len(texto)}")
+
+        # Crear hash incluyendo el prompt para cache
+        hash_contenido = self._hash_texto(texto + "|" + prompt_personalizado)
+
+        # Verificar caché primero
+        if hash_contenido in self.cache_memoria:
+            print(f"[DEBUG GeminiCorrector] Resultado encontrado en cache memoria")
+            return {**self.cache_memoria[hash_contenido], "fuente": "cache"}
+
+        # Verificar caché en disco
+        resultado_cache = self._cargar_cache(hash_contenido)
+        if resultado_cache:
+            print(f"[DEBUG GeminiCorrector] Resultado encontrado en cache disco")
+            self.cache_memoria[hash_contenido] = resultado_cache
+            return {**resultado_cache, "fuente": "cache"}
+
+        # Verificar límite de consultas
+        if self.consultas_realizadas >= self.max_consultas_hora:
+            raise Exception(f"Límite de {self.max_consultas_hora} consultas/hora alcanzado")
+
+        print(f"[DEBUG GeminiCorrector] Enviando a Gemini API...")
+
+        # Procesar con Gemini
+        try:
+            resultado = self._procesar_con_gemini_personalizado(texto, prompt_personalizado, idioma)
+
+            # Guardar en cache
+            self._guardar_cache(hash_contenido, resultado)
+            self.cache_memoria[hash_contenido] = resultado
+            self.consultas_realizadas += 1
+
+            return {**resultado, "fuente": "gemini"}
+
+        except Exception as e:
+            raise Exception(f"Error procesando con Gemini: {e}")
+
+    def _procesar_con_gemini_personalizado(self, texto: str, prompt_personalizado: str, idioma: str) -> dict:
+        """Procesa texto con Gemini usando prompt personalizado"""
+
+        prompt = self._crear_prompt_personalizado(texto, prompt_personalizado, idioma)
+
+        try:
+            # Usar Gemini 2.5 Flash con nueva API
+            response = self.client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.3,  # Algo más de creatividad para tareas variadas
+                    top_p=0.9,
+                    top_k=40,
+                    max_output_tokens=2048,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0)
+                )
+            )
+
+            # Obtener respuesta
+            contenido_respuesta = response.text.strip()
+
+            # Para prompts personalizados, la respuesta puede no ser JSON estructurado
+            # Intentar extraer JSON primero, si falla usar texto directo
+            json_valido = self._extraer_json_robusto(contenido_respuesta)
+
+            if json_valido:
+                # Respuesta estructurada (correcciones)
+                datos = json.loads(json_valido)
+                texto_procesado = self._aplicar_correcciones(texto, datos.get("errores", []))
+
+                return {
+                    "texto_corregido": texto_procesado,
+                    "errores_encontrados": datos.get("errores", []),
+                    "cambios_aplicados": len(datos.get("errores", [])),
+                    "comentarios_ia": datos.get("comentarios", "")
+                }
+            else:
+                # Respuesta de texto libre (traducciones, resúmenes, etc.)
+                return {
+                    "texto_corregido": contenido_respuesta,
+                    "errores_encontrados": [],
+                    "cambios_aplicados": 1,  # Indica que hubo transformación
+                    "comentarios_ia": f"Procesado con prompt: {prompt_personalizado[:50]}..."
+                }
+
+        except json.JSONDecodeError:
+            # Si hay error JSON pero tenemos contenido, usarlo como respuesta directa
+            if contenido_respuesta:
+                return {
+                    "texto_corregido": contenido_respuesta,
+                    "errores_encontrados": [],
+                    "cambios_aplicados": 1,
+                    "comentarios_ia": "Respuesta procesada como texto libre"
+                }
+            else:
+                raise Exception("Respuesta vacía de Gemini")
+        except Exception as e:
+            raise Exception(f"Error llamando a Gemini: {e}")
+
+    def _crear_prompt_personalizado(self, texto: str, prompt_personalizado: str, idioma: str) -> str:
+        """Crea un prompt personalizado para diferentes tipos de procesamiento"""
+
+        # Determinar si es una tarea de corrección estructurada o procesamiento libre
+        es_correccion = any(palabra in prompt_personalizado.lower() for palabra in
+                           ['corr', 'ortogr', 'gramática', 'errores'])
+
+        if es_correccion:
+            # Formato estructurado para correcciones
+            return f"""TAREA: {prompt_personalizado} en {idioma}
+
+REGLAS:
+1. Mantener el significado original
+2. Ser preciso y conservador
+3. Documentar cambios realizados
+
+FORMATO DE RESPUESTA: JSON válido sin markdown.
+
+TEXTO A PROCESAR:
+{texto}
+
+RESPUESTA JSON:
+{{"errores":[{{"original":"texto_original","corregido":"texto_corregido","tipo":"tipo_cambio","razon":"explicación"}}],"comentarios":"resumen_cambios"}}"""
+        else:
+            # Formato libre para otras tareas
+            return f"""TAREA: {prompt_personalizado}
+
+IDIOMA: {idioma}
+
+INSTRUCCIONES:
+- Sigue exactamente la tarea solicitada
+- Mantén la calidad y precisión
+- Responde solo con el resultado final
+
+TEXTO A PROCESAR:
+{texto}
+
+RESPUESTA:"""
 
 
 def extraer_texto_html(html_content: str) -> str:

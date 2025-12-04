@@ -3,7 +3,7 @@ GutenAI - Diálogo de preferencias
 Configuración de API keys, editor y otras opciones
 """
 
-from gi.repository import Gtk, Adw
+from gi.repository import Gtk, Adw, Gio
 from typing import TYPE_CHECKING
 from pathlib import Path
 
@@ -207,6 +207,27 @@ class PreferencesDialog(Adw.PreferencesWindow):
         panels_group.add(self.left_sidebar_row)
         panels_group.add(self.right_sidebar_row)
 
+        # Grupo de carpeta de trabajo
+        workspace_group = Adw.PreferencesGroup()
+        workspace_group.set_title("Carpeta de Trabajo")
+        workspace_group.set_description("Carpeta donde se descomprimen y trabajan los EPUBs")
+
+        # Carpeta de workspace
+        self.workspace_row = Adw.ActionRow()
+        self.workspace_row.set_title("Directorio de trabajo")
+        workspace_path = self.settings.get_workspace_directory()
+        self.workspace_row.set_subtitle(str(workspace_path))
+
+        # Botón para cambiar carpeta
+        change_workspace_btn = Gtk.Button()
+        change_workspace_btn.set_icon_name("folder-open-symbolic")
+        change_workspace_btn.set_tooltip_text("Cambiar carpeta")
+        change_workspace_btn.set_valign(Gtk.Align.CENTER)
+        change_workspace_btn.connect('clicked', self._on_change_workspace_clicked)
+        self.workspace_row.add_suffix(change_workspace_btn)
+
+        workspace_group.add(self.workspace_row)
+
         # Grupo de archivos recientes
         recent_group = Adw.PreferencesGroup()
         recent_group.set_title("Archivos Recientes")
@@ -226,6 +247,7 @@ class PreferencesDialog(Adw.PreferencesWindow):
         recent_group.add(clear_recent_row)
 
         ui_page.add(panels_group)
+        ui_page.add(workspace_group)
         ui_page.add(recent_group)
         self.add(ui_page)
 
@@ -338,6 +360,29 @@ class PreferencesDialog(Adw.PreferencesWindow):
         """Callback para sidebar derecho"""
         self.settings.set("ui.sidebar_right_visible", switch.get_active())
         self.settings.save_settings()
+
+    def _on_change_workspace_clicked(self, button):
+        """Abre el diálogo para cambiar la carpeta de workspace"""
+        dialog = Gtk.FileDialog()
+        dialog.set_title("Seleccionar carpeta de trabajo")
+
+        # Establecer carpeta inicial
+        current_workspace = self.settings.get_workspace_directory()
+        initial_folder = Gio.File.new_for_path(str(current_workspace))
+        dialog.set_initial_folder(initial_folder)
+
+        dialog.select_folder(self, None, self._on_workspace_folder_selected)
+
+    def _on_workspace_folder_selected(self, dialog, result):
+        """Callback cuando se selecciona una nueva carpeta de workspace"""
+        try:
+            folder = dialog.select_folder_finish(result)
+            if folder:
+                new_workspace = folder.get_path()
+                self.settings.set_workspace_directory(new_workspace)
+                self.workspace_row.set_subtitle(new_workspace)
+        except Exception as e:
+            print(f"Error seleccionando carpeta: {e}")
 
     def _on_clear_recent_clicked(self, button):
         """Limpia la lista de archivos recientes"""

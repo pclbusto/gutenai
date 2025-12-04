@@ -28,25 +28,31 @@ class GutenAIWindow(Adw.ApplicationWindow):
         # Estado de la aplicación
         self.core: Optional[GutenCore] = None
         self.current_resource: Optional[str] = None
-        
+        self.original_epub_path: Optional[Path] = None  # Para guardar cambios al cerrar
+        self.temp_workdir: Optional[Path] = None  # Directorio temporal para EPUBs abiertos
+        self.is_new_project: bool = False  # True si es nuevo proyecto, False si es EPUB abierto
+
         # Configuración básica
         self.set_default_size(1400, 900)
         self.set_title("GutenAI - EPUB Editor")
-        
+
         # Establecer ícono si está disponible
         try:
             self.set_icon_name("gutenai")
         except:
             pass
-        
+
         # Crear componentes
         self._create_components()
-        
+
         # Configurar interfaz
         self._setup_ui()
-        
+
         # Configurar acciones
         self._setup_actions()
+
+        # Conectar señal de cierre
+        self.connect('close-request', self._on_close_request)
     
     def _create_components(self):
         """Crea todos los componentes de la interfaz"""
@@ -151,7 +157,14 @@ class GutenAIWindow(Adw.ApplicationWindow):
         # Sección de herramientas
         tools_section = Gio.Menu()
         tools_section.append("Buscar en documento", "win.search_in_document")
+        tools_section.append("Buscar y reemplazar", "win.search_and_replace")
+        tools_section.append("Buscar y reemplazar en todo el libro", "win.global_search_replace")
+        tools_section.append("Renombrado en lote", "win.batch_rename")
+        tools_section.append("Estadísticas del capítulo actual", "win.show_current_chapter_statistics")
+        tools_section.append("Estadísticas del libro completo", "win.show_statistics")
+        tools_section.append("Generar tabla de contenidos", "win.generate_nav")
         tools_section.append("Validar EPUB", "win.validate_epub")
+        tools_section.append("Recargar previsualización", "win.reload_webkit")
         menu.append_section(None, tools_section)
 
         # Sección de configuración
@@ -169,7 +182,63 @@ class GutenAIWindow(Adw.ApplicationWindow):
     def _setup_actions(self):
         """Configura todas las acciones de la aplicación"""
         self.action_manager.setup_actions()
-    
+        self._setup_keyboard_handlers()
+
+    def _setup_keyboard_handlers(self):
+        """Configura manejadores de teclado a nivel de ventana"""
+        from gi.repository import Gdk
+
+        # Crear controlador de eventos de teclado
+        key_controller = Gtk.EventControllerKey()
+        key_controller.connect('key-pressed', self._on_key_pressed)
+        key_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        self.add_controller(key_controller)
+
+    def _on_key_pressed(self, controller, keyval, keycode, state):
+        """Maneja eventos de teclado a nivel de ventana"""
+        from gi.repository import Gdk
+
+        # Verificar modificadores
+        ctrl = state & Gdk.ModifierType.CONTROL_MASK
+        shift = state & Gdk.ModifierType.SHIFT_MASK
+
+        # Ctrl+F - Búsqueda (solo búsqueda, sin reemplazo)
+        if ctrl and not shift and keyval == Gdk.KEY_f:
+            if hasattr(self, 'central_editor') and self.central_editor:
+                self.central_editor.show_search_panel(show_replace=False)
+                return True  # Interceptar el evento
+
+        # Ctrl+H - Búsqueda y reemplazo
+        elif ctrl and not shift and keyval == Gdk.KEY_h:
+            if hasattr(self, 'central_editor') and self.central_editor:
+                self.central_editor.show_search_replace_panel()
+                return True  # Interceptar el evento
+
+        # Ctrl+Shift+1 - Toggle sidebar izquierdo
+        elif ctrl and shift and keyval == Gdk.KEY_1:
+            if hasattr(self, 'left_sidebar_btn'):
+                self.left_sidebar_btn.set_active(not self.left_sidebar_btn.get_active())
+                return True
+
+        # Ctrl+Shift+2 - Toggle sidebar derecho
+        elif ctrl and shift and keyval == Gdk.KEY_2:
+            if hasattr(self, 'right_sidebar_btn'):
+                self.right_sidebar_btn.set_active(not self.right_sidebar_btn.get_active())
+                return True
+
+        # Ctrl+S - Guardar
+        elif ctrl and keyval == Gdk.KEY_s:
+            if hasattr(self, 'central_editor') and self.central_editor:
+                self.central_editor.force_save()
+                return True
+
+        # F1 - Mostrar atajos
+        elif keyval == Gdk.KEY_F1:
+            self.action_manager._on_show_shortcuts(None, None)
+            return True
+
+        return False  # Permitir que el evento continúe
+
     # Métodos para comunicación entre componentes
     def set_current_resource(self, href: str, name: str):
         """Establece el recurso actual - VERSIÓN SEGURA"""
@@ -226,9 +295,115 @@ class GutenAIWindow(Adw.ApplicationWindow):
         toast.set_timeout(3)
         self.toast_overlay.add_toast(toast)
     
+    def _on_close_request(self, window):
+        """Intercepta el cierre para preguntar si guardar cambios"""
+        # Si no hay proyecto abierto, cerrar directamente
+        if not self.core:
+            self.sidebar_right.cleanup()
+            self._cleanup_temp_dir()
+            return False  # Permitir cierre
+
+        # Si es un nuevo proyecto (persistente), solo cerrar
+        if self.is_new_project:
+            self.sidebar_right.cleanup()
+            return False  # Permitir cierre
+
+        # Si es un EPUB abierto (temporal), preguntar si guardar
+        if self.original_epub_path:
+            # Mostrar diálogo de confirmación
+            dialog = Adw.MessageDialog(transient_for=self, modal=True)
+            dialog.set_heading("Guardar cambios antes de cerrar")
+            dialog.set_body("¿Deseas guardar los cambios en el EPUB antes de cerrar?")
+
+            dialog.add_response("cancel", "Cancelar")
+            dialog.add_response("no", "No guardar")
+            dialog.add_response("yes", "Guardar")
+
+            dialog.set_response_appearance("yes", Adw.ResponseAppearance.SUGGESTED)
+            dialog.set_default_response("yes")
+            dialog.set_close_response("cancel")
+
+            def on_response(dlg, response):
+                if response == "yes":
+                    # Guardar y cerrar
+                    self._save_and_close()
+                elif response == "no":
+                    # Cerrar sin guardar (limpiar temporal)
+                    self.sidebar_right.cleanup()
+                    self._cleanup_temp_dir()
+                    self.destroy()
+                # Si response == "cancel", no hacer nada (no cerrar)
+
+            dialog.connect("response", on_response)
+            dialog.present()
+
+            return True  # Prevenir cierre automático, lo manejaremos nosotros
+
+        # Fallback: cerrar directamente
+        self.sidebar_right.cleanup()
+        self._cleanup_temp_dir()
+        return False
+
+    def _cleanup_temp_dir(self):
+        """Limpia el directorio temporal si existe"""
+        import shutil
+
+        if self.temp_workdir and self.temp_workdir.exists():
+            try:
+                print(f"[Cleanup] Eliminando carpeta temporal: {self.temp_workdir}")
+                shutil.rmtree(self.temp_workdir)
+                self.temp_workdir = None
+            except Exception as e:
+                print(f"[Cleanup] Error eliminando carpeta temporal: {e}")
+
+    def _save_and_close(self):
+        """Guarda el EPUB y cierra la aplicación"""
+        try:
+            print(f"[Close] Guardando cambios en {self.original_epub_path}")
+
+            # Guardar cualquier cambio pendiente en el editor
+            if hasattr(self.central_editor, 'force_save'):
+                self.central_editor.force_save()
+
+            # Exportar el EPUB
+            self.core.export_epub(self.original_epub_path)
+
+            print(f"[Close] EPUB guardado exitosamente")
+
+            # Limpiar y cerrar
+            self.sidebar_right.cleanup()
+            self._cleanup_temp_dir()
+            self.destroy()
+
+        except Exception as e:
+            print(f"[Close] Error guardando EPUB: {e}")
+            import traceback
+            traceback.print_exc()
+
+            # Mostrar error al usuario
+            error_dialog = Adw.MessageDialog(transient_for=self, modal=True)
+            error_dialog.set_heading("Error al guardar")
+            error_dialog.set_body(f"No se pudo guardar el EPUB:\n\n{str(e)}\n\n¿Cerrar sin guardar?")
+
+            error_dialog.add_response("cancel", "Cancelar")
+            error_dialog.add_response("close_anyway", "Cerrar sin guardar")
+
+            error_dialog.set_response_appearance("close_anyway", Adw.ResponseAppearance.DESTRUCTIVE)
+            error_dialog.set_default_response("cancel")
+            error_dialog.set_close_response("cancel")
+
+            def on_error_response(dlg, response):
+                if response == "close_anyway":
+                    self.sidebar_right.cleanup()
+                    self._cleanup_temp_dir()
+                    self.destroy()
+
+            error_dialog.connect("response", on_error_response)
+            error_dialog.present()
+
     def do_close_request(self):
-        """Limpieza al cerrar la aplicación"""
-        # Notificar a componentes para limpieza
+        """Limpieza al cerrar la aplicación (fallback)"""
+        # Este método se llama como fallback si no se previene el cierre
         self.sidebar_right.cleanup()
         return False
 
@@ -240,7 +415,7 @@ class GutenAIWindow(Adw.ApplicationWindow):
 
 class GutenAIApplication(Adw.Application):
     def __init__(self):
-        super().__init__(application_id="com.gutenai.editor")
+        super().__init__(application_id="gutenai.com")
 
         # Configuración básica de la aplicación
         self.set_flags(Gio.ApplicationFlags.DEFAULT_FLAGS)
@@ -251,8 +426,16 @@ class GutenAIApplication(Adw.Application):
 
     def _on_startup(self, app):
         """Inicialización de la aplicación"""
-        # Aquí es donde se pueden configurar acciones globales, menús, etc.
-        pass
+        # Establecer icono por defecto para toda la aplicación
+        try:
+            # En GTK4, solo configuramos el icono por defecto sin verificación previa
+            # La verificación se hará en cada ventana individual
+            print("Configurando icono por defecto de la aplicación a 'gutenai'")
+            Gtk.Window.set_default_icon_name("gutenai.com")
+
+        except Exception as e:
+            print(f"Error configurando icono por defecto: {e}")
+            Gtk.Window.set_default_icon_name("text-editor")
     
     def _on_activate(self, app):
         """Crea la ventana principal"""
@@ -262,11 +445,14 @@ class GutenAIApplication(Adw.Application):
         # *** CONFIGURAR PROPIEDADES DE VENTANA PARA GNOME ***
         win.set_title("GutenAI")
 
-        # Configuración simple sin métodos problemáticos de GTK3
-        # Solo establecer ícono si está disponible
+        # Configurar icono de la ventana
         try:
-            win.set_icon_name("gutenai")
-        except:
-            # Ignorar si no hay ícono disponible
-            pass
+            icon_theme = Gtk.IconTheme.get_for_display(win.get_display())
+            if icon_theme.has_icon("gutenai.com"):
+                print("Configurando icono de ventana a 'gutenai'")
+                win.set_icon_name("gutenai.com")
+            else:
+                win.set_icon_name("text-editor")
+        except Exception as e:
+            print(f"Error configurando icono de ventana: {e}")
         win.present()

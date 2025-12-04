@@ -79,15 +79,15 @@ class SidebarLeft:
     
     def _setup_resource_list(self):
         """Configura la lista de recursos"""
-        
+
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_vexpand(True)
-        
+
         self.resource_listbox = Gtk.ListBox()
-        self.resource_listbox.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.resource_listbox.set_selection_mode(Gtk.SelectionMode.MULTIPLE)
         self.resource_listbox.add_css_class("navigation-sidebar")
-        
+
         scrolled.set_child(self.resource_listbox)
         self.sidebar_box.append(scrolled)
     
@@ -155,30 +155,30 @@ class SidebarLeft:
         # Categorías principales
         categories = [
             ("📄 Texto", KIND_DOCUMENT),
-            ("🎨 Estilos", KIND_STYLE), 
+            ("🎨 Estilos", KIND_STYLE),
             ("🖼️ Imágenes", KIND_IMAGE),
             ("🔤 Fuentes", KIND_FONT),
             ("🎵 Audio", KIND_AUDIO),
             ("🎥 Video", KIND_VIDEO),
         ]
-        
+
         for category_name, kind in categories:
             items = self.main_window.core.list_items(kind=kind)
-            
+
             if items:
                 category_row = self._create_category_row(category_name, len(items), kind)
                 self.resource_listbox.append(category_row)
-                
+
                 # *** RESTAURAR estado de expansión ***
                 if kind in self.expanded_categories:
                     category_row.set_expanded(True)
-                
+
                 # Agregar los recursos EN ORDEN DEL SPINE para documentos
                 if kind == KIND_DOCUMENT:
                     ordered_items = self._get_documents_in_spine_order(items)
                 else:
                     ordered_items = items
-                
+
                 for item in ordered_items:
                     resource_row = self._create_resource_row(
                         Path(item.href).name,
@@ -188,6 +188,9 @@ class SidebarLeft:
                     category_row.add_row(resource_row)
             else:
                 self._create_empty_category(category_name, kind)
+
+        # Agregar sección de Metadata (content.opf)
+        self._add_metadata_section()
     
     def _get_documents_in_spine_order(self, items):
         """Ordena los documentos según el spine del EPUB"""
@@ -320,7 +323,53 @@ class SidebarLeft:
 
         info_row.set_sensitive(False)
         category_row.add_row(info_row)
-    
+
+    def _add_metadata_section(self):
+        """Agrega una sección especial para editar metadata (content.opf)"""
+        if not self.main_window.core or not self.main_window.core.opf_path:
+            return
+
+        # Separador visual
+        separator = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        separator.set_margin_top(12)
+        separator.set_margin_bottom(12)
+        self.resource_listbox.append(separator)
+
+        # Fila para metadata
+        metadata_row = Adw.ActionRow()
+        metadata_row.set_title("⚙️ Metadata")
+        metadata_row.set_subtitle("Editar content.opf")
+        metadata_row.set_activatable(True)
+
+        # Icono
+        icon = Gtk.Image.new_from_icon_name("text-xml-symbolic")
+        metadata_row.add_prefix(icon)
+
+        # Flecha indicadora
+        arrow = Gtk.Image.new_from_icon_name("go-next-symbolic")
+        metadata_row.add_suffix(arrow)
+
+        # Conectar click
+        gesture = Gtk.GestureClick()
+        gesture.connect('pressed', self._on_metadata_clicked)
+        metadata_row.add_controller(gesture)
+
+        self.resource_listbox.append(metadata_row)
+
+    def _on_metadata_clicked(self, gesture, n_press, x, y):
+        """Maneja el click en la fila de metadata"""
+        if not self.main_window.core or not self.main_window.core.opf_path:
+            return
+
+        # Obtener ruta relativa del OPF desde opf_dir
+        opf_filename = self.main_window.core.opf_path.name
+
+        # Cargar el OPF en el editor
+        self.main_window.set_current_resource(opf_filename, opf_filename)
+
+        # Actualizar título
+        self.main_window.resource_title.set_text(f"Metadata - {opf_filename}")
+
     def _create_resource_row(self, name: str, href: str, resource_type: str) -> Adw.ActionRow:
         """Crea una fila con menú contextual para renombrar"""
         row = Adw.ActionRow()
@@ -587,9 +636,18 @@ class SidebarLeft:
         # *** USAR ID SANITIZADO CONSISTENTE ***
         safe_href = self._sanitize_href_for_action(href)
 
+        # Obtener archivos seleccionados
+        selected_rows = self.resource_listbox.get_selected_rows()
+        num_selected = len(selected_rows)
+
         # Sección de edición
         edit_section = Gio.Menu()
-        edit_section.append("Renombrar", f"win.rename_resource_{safe_href}")
+
+        # Texto dinámico según la cantidad de archivos seleccionados
+        if num_selected > 1:
+            edit_section.append(f"Renombrar {num_selected} archivos...", f"win.rename_resource_{safe_href}")
+        else:
+            edit_section.append("Renombrar", f"win.rename_resource_{safe_href}")
 
         # Opciones específicas por tipo
         if resource_type == KIND_DOCUMENT:
@@ -680,10 +738,30 @@ class SidebarLeft:
             print(f"[ERROR] Failed to register actions for {href}: {e}")
     
     def _on_rename_resource(self, action, param, href: str, current_name: str, resource_type: str):
-        """Maneja la acción de renombrar recurso"""
+        """Maneja la acción de renombrar recurso(s)"""
         print(f"[DEBUG] Rename action triggered for: {href}")
         try:
-            self.main_window.dialog_manager.show_rename_dialog(href, current_name, resource_type)
+            # Obtener archivos seleccionados
+            selected_rows = self.resource_listbox.get_selected_rows()
+            num_selected = len(selected_rows)
+
+            if num_selected > 1:
+                # Múltiples archivos: abrir diálogo de renombrado en lote
+                print(f"[DEBUG] Multiple files selected ({num_selected}), opening batch rename dialog")
+
+                # Recopilar hrefs de todos los archivos seleccionados
+                selected_hrefs = []
+                for row in selected_rows:
+                    if hasattr(row, 'href'):
+                        selected_hrefs.append(row.href)
+
+                # Abrir diálogo de renombrado en lote con preselección
+                from .batch_rename_dialog import show_batch_rename_dialog
+                show_batch_rename_dialog(self.main_window, preselected_hrefs=selected_hrefs)
+            else:
+                # Un solo archivo: usar diálogo estándar
+                print(f"[DEBUG] Single file selected, opening standard rename dialog")
+                self.main_window.dialog_manager.show_rename_dialog(href, current_name, resource_type)
         except Exception as e:
             print(f"[ERROR] Error showing rename dialog: {e}")
             self.main_window.show_error(f"Error abriendo diálogo de renombre: {e}")

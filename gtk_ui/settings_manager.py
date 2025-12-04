@@ -11,7 +11,7 @@ import os
 class SettingsManager:
     """Gestor de configuración persistente para GutenAI"""
 
-    def __init__(self, app_name: str = "gutenai"):
+    def __init__(self, app_name: str = "gutenai.com"):
         self.app_name = app_name
         self.config_dir = self._get_config_directory()
         self.config_file = self.config_dir / "config.json"
@@ -55,8 +55,12 @@ class SettingsManager:
 
     def _get_default_settings(self) -> Dict[str, Any]:
         """Configuración por defecto"""
+        default_workspace = str(Path.home() / "GutenAI" / "workspace")
         return {
             "version": "1.0",
+            "workspace": {
+                "directory": default_workspace
+            },
             "gemini": {
                 "api_key": "",
                 "enabled": True,
@@ -170,6 +174,19 @@ class SettingsManager:
         """Actualiza configuración de UI"""
         for key, value in kwargs.items():
             self.set(f"ui.{key}", value)
+        self.save_settings()
+
+    def get_workspace_directory(self) -> Path:
+        """Obtiene la carpeta de workspace"""
+        workspace_str = self.get("workspace.directory", str(Path.home() / "GutenAI" / "workspace"))
+        workspace_path = Path(workspace_str)
+        # Crear si no existe
+        workspace_path.mkdir(parents=True, exist_ok=True)
+        return workspace_path
+
+    def set_workspace_directory(self, directory: str):
+        """Establece la carpeta de workspace"""
+        self.set("workspace.directory", directory)
         self.save_settings()
 
     def set_current_project(self, project_path: Optional[str]):

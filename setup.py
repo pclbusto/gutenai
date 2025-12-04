@@ -30,15 +30,21 @@ def install_pngs(source: Path, Image, ImageOps) -> None:
     if not source.exists():
         raise SystemExit(f"No se encontró el icono base: {source}")
 
+    # Lista de nombres de iconos a instalar
+    icon_names = ["gutenai", "gutenai.com"]
+
     for size in PNG_SIZES:
         target_dir = TARGET_BASE / f"{size}x{size}" / "apps"
         target_dir.mkdir(parents=True, exist_ok=True)
-        target_path = target_dir / "gutenai.png"
 
         with Image.open(source) as img:
             icon = ImageOps.fit(img.convert("RGBA"), (size, size), method=Image.LANCZOS)
-            icon.save(target_path, format="PNG")
-        print(f"✔ Icono {size}x{size} instalado en {target_path}")
+
+            # Instalar con ambos nombres
+            for icon_name in icon_names:
+                target_path = target_dir / f"{icon_name}.png"
+                icon.save(target_path, format="PNG")
+                print(f"✔ Icono {icon_name} {size}x{size} instalado en {target_path}")
 
 
 def install_svg(source: Path) -> None:
@@ -49,9 +55,15 @@ def install_svg(source: Path) -> None:
 
     target_dir = TARGET_BASE / "scalable" / "apps"
     target_dir.mkdir(parents=True, exist_ok=True)
-    target_path = target_dir / "gutenai.svg"
-    shutil.copy2(source, target_path)
-    print(f"✔ Icono SVG instalado en {target_path}")
+
+    # Lista de nombres de iconos a instalar
+    icon_names = ["gutenai", "gutenai.com"]
+
+    # Instalar con ambos nombres
+    for icon_name in icon_names:
+        target_path = target_dir / f"{icon_name}.svg"
+        shutil.copy2(source, target_path)
+        print(f"✔ Icono SVG {icon_name} instalado en {target_path}")
 
 
 def refresh_icon_cache() -> None:

@@ -1328,7 +1328,7 @@ class GutenAIWindow(Gtk.ApplicationWindow):
 
 class GutenAIApplication(Adw.Application):
     def __init__(self):
-        super().__init__(application_id="com.gutenai.editor")
+        super().__init__(application_id="gutenai")
         self.connect('activate', self.on_activate)
         self.setup_icon_theme()
         # Crear acción para "Acerca de"
@@ -1360,7 +1360,7 @@ class GutenAIApplication(Adw.Application):
         """Mostrar diálogo Acerca de"""
         from about import create_about_window
         about = create_about_window(self.win)
-        about.set_application_icon("com.gutenai.editor")
+        about.set_application_icon("gutenai")
         about.present()
 
     def on_shortcuts_action(self, action, param):

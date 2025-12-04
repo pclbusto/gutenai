@@ -25,14 +25,16 @@ class CorrectionModal(Adw.Window):
         self.corrector = GeminiCorrector(api_key)
         self.original_html = ""
         self.texto_limpio = ""
+        self.texto_seleccionado = ""
         self.resultado_correccion = None
+        self.custom_prompt = ""
 
         self._setup_ui()
         self._connect_signals()
 
         # Configurar ventana
-        self.set_title("GutenAI - Corrector Inteligente")
-        self.set_default_size(1100, 750)
+        self.set_title("GutenAI - Asistente IA")
+        self.set_default_size(1100, 800)
         self.set_modal(True)
         self.set_transient_for(parent_window)
 
@@ -41,7 +43,7 @@ class CorrectionModal(Adw.Window):
 
         # HeaderBar
         header_bar = Adw.HeaderBar()
-        header_bar.set_title_widget(Gtk.Label(label="Corrector Inteligente"))
+        header_bar.set_title_widget(Gtk.Label(label="Asistente IA"))
 
         # Botón cancelar
         cancel_btn = Gtk.Button(label="Cancelar")
@@ -49,7 +51,7 @@ class CorrectionModal(Adw.Window):
         header_bar.pack_start(cancel_btn)
 
         # Botón aplicar (inicialmente deshabilitado)
-        self.apply_btn = Gtk.Button(label="Aplicar Correcciones")
+        self.apply_btn = Gtk.Button(label="Aplicar Cambios")
         self.apply_btn.set_css_classes(["suggested-action"])
         self.apply_btn.set_sensitive(False)
         self.apply_btn.connect('clicked', self._on_apply_corrections)
@@ -64,6 +66,9 @@ class CorrectionModal(Adw.Window):
 
         # Toolbar con información y controles
         self._create_info_toolbar(main_box)
+
+        # Campo de prompt personalizado
+        self._create_prompt_panel(main_box)
 
         # Panel dividido: original vs corregido
         self._create_comparison_panel(main_box)
@@ -91,8 +96,8 @@ class CorrectionModal(Adw.Window):
         self.usage_label.set_css_classes(["caption"])
         self._update_usage_info()
 
-        # Botón correccir
-        self.correct_btn = Gtk.Button(label="Corregir con IA")
+        # Botón procesar
+        self.correct_btn = Gtk.Button(label="Procesar con IA")
         self.correct_btn.set_css_classes(["suggested-action"])
         self.correct_btn.connect('clicked', self._on_start_correction)
 
@@ -105,6 +110,47 @@ class CorrectionModal(Adw.Window):
         info_bar.append(self.correct_btn)
 
         parent_box.append(info_bar)
+
+    def _create_prompt_panel(self, parent_box):
+        """Crea el panel para ingreso de prompt personalizado"""
+
+        # Grupo de prompt
+        prompt_group = Adw.PreferencesGroup()
+        prompt_group.set_title("Instrucciones para la IA")
+        prompt_group.set_description("Especifica qué quieres que haga la IA con el texto seleccionado")
+        prompt_group.set_margin_start(12)
+        prompt_group.set_margin_end(12)
+        prompt_group.set_margin_bottom(6)
+
+        # Entry row para el prompt
+        self.prompt_row = Adw.EntryRow()
+        self.prompt_row.set_title("Prompt personalizado")
+        self.prompt_row.set_text("Corrige ortografía y gramática manteniendo el estilo original")
+
+        # Botones de prompt rápido
+        prompt_buttons_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        prompt_buttons_box.set_margin_top(6)
+        prompt_buttons_box.set_margin_bottom(6)
+        prompt_buttons_box.set_margin_start(12)
+        prompt_buttons_box.set_margin_end(12)
+
+        quick_prompts = [
+            ("Corregir", "Corrige ortografía y gramática manteniendo el estilo original"),
+            ("Mejorar", "Mejora la redacción y claridad del texto manteniendo el significado"),
+            ("Resumir", "Haz un resumen conciso del texto"),
+            ("Traducir", "Traduce el texto al inglés")
+        ]
+
+        for label, prompt in quick_prompts:
+            btn = Gtk.Button(label=label)
+            btn.set_css_classes(["flat", "pill"])
+            btn.connect('clicked', self._on_quick_prompt, prompt)
+            prompt_buttons_box.append(btn)
+
+        prompt_group.add(self.prompt_row)
+
+        parent_box.append(prompt_group)
+        parent_box.append(prompt_buttons_box)
 
     def _create_comparison_panel(self, parent_box):
         """Crea el panel de comparación texto original vs corregido"""
@@ -200,12 +246,15 @@ class CorrectionModal(Adw.Window):
         # Configurar tags de resaltado para los TextViews
         self._setup_text_highlighting()
 
-    def show_for_text(self, html_content: str):
-        """Muestra la modal para corregir el texto dado"""
-        self.original_html = html_content
+    def show_for_selected_text(self, selected_text: str):
+        """Muestra la modal para procesar el texto seleccionado"""
+        self.texto_seleccionado = selected_text.strip()
 
-        # Extraer texto limpio del HTML
-        self.texto_limpio = extraer_texto_html(html_content)
+        if not self.texto_seleccionado:
+            return False
+
+        # Usar directamente el texto seleccionado
+        self.texto_limpio = self.texto_seleccionado
 
         # Mostrar texto original
         buffer = self.original_textview.get_buffer()
@@ -225,6 +274,7 @@ class CorrectionModal(Adw.Window):
 
         # Mostrar modal
         self.present()
+        return True
 
     def _setup_text_highlighting(self):
         """Configura tags de resaltado para los TextViews"""
@@ -413,28 +463,50 @@ class CorrectionModal(Adw.Window):
 
         return texto_resultado
 
+    def _on_quick_prompt(self, button, prompt_text):
+        """Establece un prompt rápido"""
+        self.prompt_row.set_text(prompt_text)
+
     def _on_start_correction(self, button):
-        """Inicia el proceso de corrección con IA"""
+        """Inicia el proceso con IA usando prompt personalizado"""
         if not self.texto_limpio.strip():
-            self._show_toast("No hay texto para corregir")
+            self._show_toast("No hay texto para procesar")
+            return
+
+        # Obtener prompt personalizado
+        self.custom_prompt = self.prompt_row.get_text().strip()
+        if not self.custom_prompt:
+            self._show_toast("Ingresa instrucciones para la IA")
             return
 
         # Deshabilitar botón y mostrar spinner
         button.set_sensitive(False)
         self.spinner.start()
 
-        # Ejecutar corrección en hilo separado
-        def correction_thread():
+        # Ejecutar procesamiento en hilo separado
+        def processing_thread():
             try:
-                resultado = self.corrector.corregir_texto(self.texto_limpio, idioma="es")
+                print(f"[DEBUG] Iniciando procesamiento con prompt: '{self.custom_prompt}'")
+                print(f"[DEBUG] Texto a procesar: '{self.texto_limpio[:100]}...'")
+
+                resultado = self.corrector.procesar_con_prompt(
+                    self.texto_limpio,
+                    self.custom_prompt,
+                    idioma="es"
+                )
+
+                print(f"[DEBUG] Resultado obtenido: {resultado}")
 
                 # Actualizar UI en hilo principal
                 GLib.idle_add(self._on_correction_completed, resultado)
 
             except Exception as e:
+                print(f"[ERROR] Error en procesamiento: {e}")
+                import traceback
+                traceback.print_exc()
                 GLib.idle_add(self._on_correction_error, str(e))
 
-        threading.Thread(target=correction_thread, daemon=True).start()
+        threading.Thread(target=processing_thread, daemon=True).start()
 
     def _on_correction_completed(self, resultado):
         """Callback cuando la corrección se completa exitosamente"""
@@ -541,7 +613,7 @@ class CorrectionModal(Adw.Window):
             child = next_child
 
     def _on_apply_corrections(self, button):
-        """Aplica las correcciones al documento original"""
+        """Aplica las correcciones reemplazando solo el texto seleccionado"""
         if not self.resultado_correccion:
             return
 
@@ -551,24 +623,35 @@ class CorrectionModal(Adw.Window):
         end_iter = corrected_buffer.get_end_iter()
         final_text = corrected_buffer.get_text(start_iter, end_iter, False)
 
-        # Aplicar el texto corregido al HTML original
-        # NOTA: Aquí necesitarías implementar la lógica para reemplazar
-        # el contenido de texto en el HTML preservando las etiquetas
         try:
-            # Por simplicidad, reemplazamos todo el contenido del editor
-            # Una implementación más sofisticada preservaría mejor el HTML
+            # Reemplazar solo el texto seleccionado en el editor
             if hasattr(self.parent_window, 'central_editor'):
-                self.parent_window.central_editor.set_text(
-                    self._integrate_text_to_html(self.original_html, final_text)
-                )
+                self._replace_selected_text_in_editor(final_text)
 
-            self._show_toast(f"✓ Correcciones aplicadas ({self.resultado_correccion['cambios_aplicados']} cambios)")
+            self._show_toast(f"✓ Cambios aplicados")
 
             # Cerrar modal después de aplicar
             GLib.timeout_add(1000, self.close)
 
         except Exception as e:
-            self._show_toast(f"Error aplicando correcciones: {e}")
+            self._show_toast(f"Error aplicando cambios: {e}")
+
+    def _replace_selected_text_in_editor(self, new_text: str):
+        """Reemplaza el texto seleccionado en el editor con el nuevo texto"""
+        editor = self.parent_window.central_editor
+        buffer = editor.source_buffer
+
+        # Verificar si hay selección
+        if not buffer.get_has_selection():
+            # Si no hay selección, insertar al final del cursor
+            cursor_mark = buffer.get_insert()
+            cursor_iter = buffer.get_iter_at_mark(cursor_mark)
+            buffer.insert(cursor_iter, new_text)
+        else:
+            # Reemplazar la selección actual
+            start, end = buffer.get_selection_bounds()
+            buffer.delete(start, end)
+            buffer.insert(start, new_text)
 
     def _integrate_text_to_html(self, html_original: str, texto_corregido: str) -> str:
         """
@@ -749,12 +832,20 @@ def integrate_correction_modal_with_editor(central_editor):
 
 
 def _show_correction_modal(central_editor):
-    """Muestra la modal de corrección para el texto actual"""
+    """Muestra la modal de asistente IA para el texto seleccionado"""
 
-    # Verificar que hay contenido
-    current_text = central_editor.get_current_text()
-    if not current_text.strip():
-        central_editor.main_window.show_error("No hay contenido para corregir")
+    # Verificar que hay texto seleccionado
+    buffer = central_editor.source_buffer
+    if not buffer.get_has_selection():
+        central_editor.main_window.show_error("Selecciona texto primero para procesarlo con IA")
+        return
+
+    # Obtener texto seleccionado
+    start, end = buffer.get_selection_bounds()
+    selected_text = buffer.get_text(start, end, False)
+
+    if not selected_text.strip():
+        central_editor.main_window.show_error("El texto seleccionado está vacío")
         return
 
     # Obtener API key de configuración
@@ -762,7 +853,7 @@ def _show_correction_modal(central_editor):
     settings = get_settings()
 
     if not settings.is_gemini_enabled():
-        central_editor.main_window.show_error("Corrección con IA deshabilitada. Ve a Preferencias para configurar.")
+        central_editor.main_window.show_error("Asistente IA deshabilitado. Ve a Preferencias para configurar.")
         return
 
     api_key = settings.get_gemini_api_key()
@@ -773,7 +864,10 @@ def _show_correction_modal(central_editor):
     try:
         # Crear y mostrar modal
         modal = CorrectionModal(central_editor.main_window, api_key)
-        modal.show_for_text(current_text)
+        if modal.show_for_selected_text(selected_text):
+            pass  # Modal mostrada exitosamente
+        else:
+            central_editor.main_window.show_error("Error: texto seleccionado vacío")
 
     except Exception as e:
-        central_editor.main_window.show_error(f"Error abriendo corrector: {e}")
+        central_editor.main_window.show_error(f"Error abriendo asistente IA: {e}")

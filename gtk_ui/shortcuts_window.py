@@ -136,11 +136,52 @@ def show_shortcuts_window(parent_window: 'GutenAIWindow'):
               </object>
             </child>
 
+          </object>
+        </child>
+
+        <!-- Grupo de Búsqueda -->
+        <child>
+          <object class="GtkShortcutsGroup">
+            <property name="visible">1</property>
+            <property name="title">Búsqueda</property>
+
             <child>
               <object class="GtkShortcutsShortcut">
                 <property name="visible">1</property>
                 <property name="accelerator">&lt;Ctrl&gt;f</property>
-                <property name="title">Buscar</property>
+                <property name="title">Buscar en documento</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">&lt;Ctrl&gt;h</property>
+                <property name="title">Buscar y reemplazar</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;h</property>
+                <property name="title">Buscar y reemplazar en todo el libro</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">F3</property>
+                <property name="title">Buscar siguiente</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">&lt;Shift&gt;F3</property>
+                <property name="title">Buscar anterior</property>
               </object>
             </child>
 
@@ -201,6 +242,30 @@ def show_shortcuts_window(parent_window: 'GutenAIWindow'):
               </object>
             </child>
 
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">&lt;Ctrl&gt;&lt;Alt&gt;u</property>
+                <property name="title">Lista no ordenada (ul)</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">&lt;Ctrl&gt;&lt;Alt&gt;o</property>
+                <property name="title">Lista ordenada (ol)</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;i</property>
+                <property name="title">Elemento de lista (li)</property>
+              </object>
+            </child>
+
           </object>
         </child>
 
@@ -213,7 +278,7 @@ def show_shortcuts_window(parent_window: 'GutenAIWindow'):
             <child>
               <object class="GtkShortcutsShortcut">
                 <property name="visible">1</property>
-                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;1</property>
+                <property name="accelerator">F9</property>
                 <property name="title">Mostrar/ocultar estructura</property>
               </object>
             </child>
@@ -221,7 +286,7 @@ def show_shortcuts_window(parent_window: 'GutenAIWindow'):
             <child>
               <object class="GtkShortcutsShortcut">
                 <property name="visible">1</property>
-                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;2</property>
+                <property name="accelerator">F10</property>
                 <property name="title">Mostrar/ocultar previsualización</property>
               </object>
             </child>
@@ -237,7 +302,7 @@ def show_shortcuts_window(parent_window: 'GutenAIWindow'):
             <child>
               <object class="GtkShortcutsShortcut">
                 <property name="visible">1</property>
-                <property name="accelerator">&lt;Ctrl&gt;r</property>
+                <property name="accelerator">F5</property>
                 <property name="title">Recargar previsualización</property>
               </object>
             </child>
@@ -294,16 +359,57 @@ def show_shortcuts_window(parent_window: 'GutenAIWindow'):
             <child>
               <object class="GtkShortcutsShortcut">
                 <property name="visible">1</property>
-                <property name="accelerator">Delete</property>
-                <property name="title">Eliminar recurso seleccionado</property>
+                <property name="accelerator">F2</property>
+                <property name="title">Renombrar recurso</property>
               </object>
             </child>
 
             <child>
               <object class="GtkShortcutsShortcut">
                 <property name="visible">1</property>
-                <property name="accelerator">F2</property>
-                <property name="title">Renombrar recurso</property>
+                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;r</property>
+                <property name="title">Renombrado en lote</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">&lt;Ctrl&gt;Delete</property>
+                <property name="title">Eliminar recurso seleccionado</property>
+              </object>
+            </child>
+
+          </object>
+        </child>
+
+        <!-- Grupo de Estadísticas y Herramientas -->
+        <child>
+          <object class="GtkShortcutsGroup">
+            <property name="visible">1</property>
+            <property name="title">Estadísticas y Herramientas</property>
+
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">F6</property>
+                <property name="title">Estadísticas del capítulo actual</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">&lt;Ctrl&gt;F6</property>
+                <property name="title">Estadísticas del libro completo</property>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkShortcutsShortcut">
+                <property name="visible">1</property>
+                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;v</property>
+                <property name="title">Validar EPUB</property>
               </object>
             </child>
 
@@ -319,24 +425,8 @@ def show_shortcuts_window(parent_window: 'GutenAIWindow'):
             <child>
               <object class="GtkShortcutsShortcut">
                 <property name="visible">1</property>
-                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;f7</property>
+                <property name="accelerator">&lt;Ctrl&gt;&lt;Shift&gt;F7</property>
                 <property name="title">Corrector IA</property>
-              </object>
-            </child>
-
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="accelerator">&lt;Ctrl&gt;&lt;Alt&gt;c</property>
-                <property name="title">Corrección rápida (sin asignar)</property>
-              </object>
-            </child>
-
-            <child>
-              <object class="GtkShortcutsShortcut">
-                <property name="visible">1</property>
-                <property name="accelerator">&lt;Ctrl&gt;&lt;Alt&gt;s</property>
-                <property name="title">Sugerencias (sin asignar)</property>
               </object>
             </child>
 

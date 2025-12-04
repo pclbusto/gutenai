@@ -589,7 +589,7 @@ if __name__ == "__main__":
 
     class TestApp(Adw.Application):
         def __init__(self):
-            super().__init__(application_id="com.gutenai.epubcheck.test")
+            super().__init__(application_id="gutenai.com")
 
         def do_activate(self):
             dialog = EpubCheckDialog()

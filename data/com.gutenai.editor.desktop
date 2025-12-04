@@ -2,11 +2,13 @@
 Name=GutenAI
 GenericName=EPUB Editor
 Comment=Modern EPUB editor with AI-powered text correction
-Exec=python3 /home/pedro/PycharmProjects/gutenai/main.py
-Icon=com.gutenai.editor
+Exec=/home/pedro/PycharmProjects/gutenai/run_gutenai.sh
+Icon=gutenai.com
 Terminal=false
 Type=Application
 Categories=Office;Publishing;
 Keywords=epub;ebook;editor;publishing;
 StartupNotify=true
 StartupWMClass=GutenAI
+# Variables de entorno para reducir warnings
+X-GNOME-UsesNotifications=true

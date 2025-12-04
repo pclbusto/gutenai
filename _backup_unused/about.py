@@ -7,7 +7,7 @@ def create_about_window(parent):
     about = Adw.AboutWindow(transient_for=parent, modal=True)
 
     about.set_application_name("Guten.AI")
-    about.set_application_icon("com.gutenai.editor")
+    about.set_application_icon("gutenai")
     about.set_version("1.0.0")
     about.set_comments("Editor de libros EPUB con inteligencia artificial")
 

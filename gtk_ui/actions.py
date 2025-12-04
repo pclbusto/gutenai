@@ -97,10 +97,23 @@ class ActionManager:
         validate_epub_action.connect("activate", self._on_validate_epub)
         self.main_window.add_action(validate_epub_action)
 
+        # Recargar WebView
+        reload_webkit_action = Gio.SimpleAction.new("reload_webkit", None)
+        reload_webkit_action.connect("activate", self._on_reload_webkit)
+        self.main_window.add_action(reload_webkit_action)
+
         # Acciones de búsqueda en documento
         search_action = Gio.SimpleAction.new("search_in_document", None)
         search_action.connect("activate", self._on_search_in_document)
         self.main_window.add_action(search_action)
+
+        search_replace_action = Gio.SimpleAction.new("search_and_replace", None)
+        search_replace_action.connect("activate", self._on_search_and_replace)
+        self.main_window.add_action(search_replace_action)
+
+        global_search_replace_action = Gio.SimpleAction.new("global_search_replace", None)
+        global_search_replace_action.connect("activate", self._on_global_search_replace)
+        self.main_window.add_action(global_search_replace_action)
 
         search_next_action = Gio.SimpleAction.new("search_next", None)
         search_next_action.connect("activate", self._on_search_next)
@@ -109,6 +122,70 @@ class ActionManager:
         search_prev_action = Gio.SimpleAction.new("search_prev", None)
         search_prev_action.connect("activate", self._on_search_prev)
         self.main_window.add_action(search_prev_action)
+
+        # Estadísticas del libro
+        statistics_action = Gio.SimpleAction.new("show_statistics", None)
+        statistics_action.connect("activate", self._on_show_statistics)
+        self.main_window.add_action(statistics_action)
+
+        # Estadísticas del capítulo actual
+        current_chapter_stats_action = Gio.SimpleAction.new("show_current_chapter_statistics", None)
+        current_chapter_stats_action.connect("activate", self._on_show_current_chapter_statistics)
+        self.main_window.add_action(current_chapter_stats_action)
+
+        # Renombrado en lote
+        batch_rename_action = Gio.SimpleAction.new("batch_rename", None)
+        batch_rename_action.connect("activate", self._on_batch_rename)
+        self.main_window.add_action(batch_rename_action)
+
+        # Dividir capítulo
+        split_chapter_action = Gio.SimpleAction.new("split_chapter", None)
+        split_chapter_action.connect("activate", self._on_split_chapter)
+        self.main_window.add_action(split_chapter_action)
+
+        # Acciones de formato HTML (delegadas al editor)
+        wrap_paragraph_action = Gio.SimpleAction.new("wrap_paragraph", None)
+        wrap_paragraph_action.connect("activate", self._on_wrap_paragraph)
+        self.main_window.add_action(wrap_paragraph_action)
+
+        wrap_h1_action = Gio.SimpleAction.new("wrap_h1", None)
+        wrap_h1_action.connect("activate", self._on_wrap_h1)
+        self.main_window.add_action(wrap_h1_action)
+
+        wrap_h2_action = Gio.SimpleAction.new("wrap_h2", None)
+        wrap_h2_action.connect("activate", self._on_wrap_h2)
+        self.main_window.add_action(wrap_h2_action)
+
+        wrap_h3_action = Gio.SimpleAction.new("wrap_h3", None)
+        wrap_h3_action.connect("activate", self._on_wrap_h3)
+        self.main_window.add_action(wrap_h3_action)
+
+        wrap_blockquote_action = Gio.SimpleAction.new("wrap_blockquote", None)
+        wrap_blockquote_action.connect("activate", self._on_wrap_blockquote)
+        self.main_window.add_action(wrap_blockquote_action)
+
+        link_styles_action = Gio.SimpleAction.new("link_styles", None)
+        link_styles_action.connect("activate", self._on_link_styles)
+        self.main_window.add_action(link_styles_action)
+
+        # Acción de guardado manual
+        save_action = Gio.SimpleAction.new("save_current", None)
+        save_action.connect("activate", self._on_save_current)
+        self.main_window.add_action(save_action)
+
+        # Acciones para toggles de sidebar
+        left_toggle_action = Gio.SimpleAction.new("toggle_left_sidebar", None)
+        left_toggle_action.connect("activate", self._on_toggle_left_sidebar)
+        self.main_window.add_action(left_toggle_action)
+
+        right_toggle_action = Gio.SimpleAction.new("toggle_right_sidebar", None)
+        right_toggle_action.connect("activate", self._on_toggle_right_sidebar)
+        self.main_window.add_action(right_toggle_action)
+
+        # Acción para fullscreen preview
+        fullscreen_action = Gio.SimpleAction.new("fullscreen_preview", None)
+        fullscreen_action.connect("activate", self._on_fullscreen_preview)
+        self.main_window.add_action(fullscreen_action)
 
         # *** CONFIGURAR ATAJOS DE TECLADO ***
         self._setup_keyboard_shortcuts()
@@ -121,6 +198,7 @@ class ActionManager:
         app.set_accels_for_action("win.open_epub", ["<Ctrl>o"])
         app.set_accels_for_action("win.open_folder", ["<Ctrl><Shift>o"])
         app.set_accels_for_action("win.new_project", ["<Ctrl>n"])
+        app.set_accels_for_action("win.save_current", ["<Ctrl>s"])
         app.set_accels_for_action("win.export_epub", ["<Ctrl><Shift>e"])
         app.set_accels_for_action("app.quit", ["<Ctrl>q"])
         
@@ -136,8 +214,8 @@ class ActionManager:
         app.set_accels_for_action("win.link_styles", ["<Ctrl>l"])
         
         # Atajos de navegación
-        app.set_accels_for_action("win.toggle_left_sidebar", ["<Ctrl><Shift>1"])
-        app.set_accels_for_action("win.toggle_right_sidebar", ["<Ctrl><Shift>2"])
+        app.set_accels_for_action("win.toggle_left_sidebar", ["F9"])
+        app.set_accels_for_action("win.toggle_right_sidebar", ["F10"])
         app.set_accels_for_action("win.fullscreen_preview", ["F11"])
         app.set_accels_for_action("win.generate_nav", ["<Ctrl>g"])
         
@@ -145,6 +223,7 @@ class ActionManager:
         app.set_accels_for_action("win.show_shortcuts", ["F1"])  # Solo F1 por ahora
         app.set_accels_for_action("win.preferences", ["<Ctrl><Shift>p"])
         app.set_accels_for_action("win.validate_epub", ["<Ctrl><Shift>v"])
+        app.set_accels_for_action("win.reload_webkit", ["F5"])  # Recargar previsualización
 
         # Atajos de IA (cambiado para evitar conflicto)
         app.set_accels_for_action("win.ai_correction", ["<Ctrl><Shift>F7"])
@@ -156,27 +235,18 @@ class ActionManager:
         app.set_accels_for_action("win.import_font", ["<Ctrl><Shift>t"])  # Cambiado de F a T
         app.set_accels_for_action("win.rename_resource", ["F2"])  # Renombrar recurso seleccionado
         app.set_accels_for_action("win.delete_resource", ["<Ctrl>Delete"])  # Eliminar recurso seleccionado
+        app.set_accels_for_action("win.batch_rename", ["<Ctrl><Shift>r"])  # Renombrado en lote
 
         # Atajos de búsqueda
         app.set_accels_for_action("win.search_in_document", ["<Ctrl>f"])
+        app.set_accels_for_action("win.search_and_replace", ["<Ctrl>h"])
         app.set_accels_for_action("win.search_next", ["F3"])
         app.set_accels_for_action("win.search_prev", ["<Shift>F3"])
+        app.set_accels_for_action("win.global_search_replace", ["<Ctrl><Shift>h"])
 
-        # Crear acciones para toggles de sidebar
-        left_toggle_action = Gio.SimpleAction.new("toggle_left_sidebar", None)
-        left_toggle_action.connect("activate", lambda a, p: self.main_window.left_sidebar_btn.set_active(
-            not self.main_window.left_sidebar_btn.get_active()))
-        self.main_window.add_action(left_toggle_action)
-        
-        right_toggle_action = Gio.SimpleAction.new("toggle_right_sidebar", None)
-        right_toggle_action.connect("activate", lambda a, p: self.main_window.right_sidebar_btn.set_active(
-            not self.main_window.right_sidebar_btn.get_active()))
-        self.main_window.add_action(right_toggle_action)
-        
-        # Acción para fullscreen preview
-        fullscreen_action = Gio.SimpleAction.new("fullscreen_preview", None)
-        fullscreen_action.connect("activate", lambda a, p: self.main_window.sidebar_right._on_fullscreen_preview(None))
-        self.main_window.add_action(fullscreen_action)
+        # Atajos de estadísticas
+        app.set_accels_for_action("win.show_current_chapter_statistics", ["F6"])
+        app.set_accels_for_action("win.show_statistics", ["<Ctrl>F6"])
     
     def _on_show_shortcuts(self, action, param):
         """Muestra la ventana de atajos"""
@@ -184,80 +254,132 @@ class ActionManager:
     
     def _on_open_epub(self, action, param):
         """Abre un archivo EPUB existente"""
-        
+        from .settings_manager import get_settings
+
         dialog = Gtk.FileDialog()
         dialog.set_title("Abrir EPUB")
-        
+
+        # Establecer carpeta inicial desde las preferencias
+        settings = get_settings()
+        workspace_dir = settings.get_workspace_directory()
+        initial_folder = Gio.File.new_for_path(str(workspace_dir))
+        dialog.set_initial_folder(initial_folder)
+
         # Filtro para archivos EPUB
         filter_epub = Gtk.FileFilter()
         filter_epub.set_name("Archivos EPUB")
         filter_epub.add_pattern("*.epub")
-        
+
         filters = Gio.ListStore()
         filters.append(filter_epub)
         dialog.set_filters(filters)
-        
+
         dialog.open(self.main_window, None, self._on_open_epub_response)
     
     def _on_open_epub_response(self, dialog, result):
         """Maneja la respuesta del diálogo de apertura de EPUB"""
+        import shutil
+        import tempfile
+
         try:
             file = dialog.open_finish(result)
             if file:
                 epub_path = Path(file.get_path())
-                
+
                 # Verificar que el archivo existe y es legible
                 if not epub_path.exists():
                     self.main_window.show_error("El archivo EPUB no existe")
                     return
-                
+
                 if not epub_path.is_file():
                     self.main_window.show_error("La ruta seleccionada no es un archivo")
                     return
-                
-                # Directorio temporal para descomprimir
-                workdir = Path.home() / "GutenAI" / "temp"
-                workdir.mkdir(parents=True, exist_ok=True)
-                
-                # Abrir EPUB usando el core
-                self.main_window.core = GutenCore.open_epub(epub_path, workdir)
-                
+
+                # Limpiar proyecto anterior si existe
+                self._cleanup_previous_project()
+
+                # Crear carpeta temporal única
+                temp_dir = Path(tempfile.mkdtemp(prefix=f"gutenai_{epub_path.stem}_"))
+                print(f"[Open EPUB] Usando carpeta temporal: {temp_dir}")
+
+                # Descomprimir el EPUB en la carpeta temporal
+                self.main_window.core = GutenCore.open_epub(epub_path, temp_dir)
+
+                # Guardar estado
+                self.main_window.original_epub_path = epub_path
+                self.main_window.temp_workdir = temp_dir
+                self.main_window.is_new_project = False
+
                 # Actualizar UI
                 self._update_ui_after_open()
-                self.main_window.show_info(f"EPUB '{epub_path.name}' abierto correctamente")
-                
+                self.main_window.show_info(f"EPUB '{epub_path.name}' abierto")
+
         except Exception as e:
             self.main_window.show_error(f"Error abriendo EPUB: {e}")
     
+    def _cleanup_previous_project(self):
+        """Limpia el proyecto anterior si existe"""
+        import shutil
+
+        # Si hay una carpeta temporal, eliminarla
+        if self.main_window.temp_workdir and self.main_window.temp_workdir.exists():
+            try:
+                print(f"[Cleanup] Eliminando carpeta temporal: {self.main_window.temp_workdir}")
+                shutil.rmtree(self.main_window.temp_workdir)
+                self.main_window.temp_workdir = None
+            except Exception as e:
+                print(f"[Cleanup] Error eliminando carpeta temporal: {e}")
+
+        # Resetear estado
+        self.main_window.core = None
+        self.main_window.current_resource = None
+        self.main_window.original_epub_path = None
+
     def _on_open_folder(self, action, param):
         """Abre una carpeta de proyecto EPUB existente"""
-        
+        from .settings_manager import get_settings
+
         dialog = Gtk.FileDialog()
         dialog.set_title("Abrir carpeta proyecto EPUB")
+
+        # Establecer carpeta inicial desde las preferencias
+        settings = get_settings()
+        workspace_dir = settings.get_workspace_directory()
+        initial_folder = Gio.File.new_for_path(str(workspace_dir))
+        dialog.set_initial_folder(initial_folder)
+
         dialog.select_folder(self.main_window, None, self._on_open_folder_response)
-    
+
     def _on_open_folder_response(self, dialog, result):
         """Maneja la respuesta del diálogo de apertura de carpeta"""
         try:
             folder = dialog.select_folder_finish(result)
             if folder:
                 project_dir = Path(folder.get_path())
-                
+
                 # Verificar estructura válida de proyecto EPUB
                 if not self._validate_epub_project(project_dir):
                     return
-                
+
+                # Limpiar proyecto anterior si existe
+                self._cleanup_previous_project()
+
                 # Abrir proyecto usando el core
                 self.main_window.core = GutenCore.open_folder(project_dir)
-                
+
+                # Marcar como proyecto persistente (NO temporal)
+                self.main_window.is_new_project = True
+                self.main_window.temp_workdir = None
+                self.main_window.original_epub_path = None
+
                 # Actualizar UI
                 self._update_ui_after_open()
-                
+
                 # Mensaje de éxito
                 metadata = self.main_window.core.get_metadata()
                 project_name = metadata.get("title", project_dir.name)
                 self.main_window.show_info(f"Proyecto '{project_name}' abierto correctamente")
-                
+
         except Exception as e:
             self.main_window.show_error(f"Error abriendo carpeta proyecto: {e}")
     
@@ -282,9 +404,17 @@ class ActionManager:
     
     def _on_new_project(self, action, param):
         """Crea un nuevo proyecto EPUB"""
-        
+        from .settings_manager import get_settings
+
         dialog = Gtk.FileDialog()
         dialog.set_title("Crear nuevo proyecto EPUB - Selecciona carpeta del proyecto")
+
+        # Establecer carpeta inicial desde las preferencias
+        settings = get_settings()
+        workspace_dir = settings.get_workspace_directory()
+        initial_folder = Gio.File.new_for_path(str(workspace_dir))
+        dialog.set_initial_folder(initial_folder)
+
         dialog.select_folder(self.main_window, None, self._on_new_project_response)
     
     def _on_new_project_response(self, dialog, result):
@@ -303,12 +433,20 @@ class ActionManager:
                     )
                     return
 
+                # Limpiar proyecto anterior si existe
+                self._cleanup_previous_project()
+
                 # Crear proyecto usando el core directamente en la carpeta seleccionada
                 self.main_window.core = GutenCore.new_project(
                     project_dir,
                     title="Nuevo Libro",
                     lang="es"
                 )
+
+                # Marcar como proyecto nuevo (NO es temporal)
+                self.main_window.is_new_project = True
+                self.main_window.temp_workdir = None
+                self.main_window.original_epub_path = None
 
                 # Actualizar UI
                 self._update_ui_after_open()
@@ -596,6 +734,14 @@ class ActionManager:
         # Delegar al dialog manager
         self.main_window.dialog_manager.show_export_text_dialog()
 
+    def _on_reload_webkit(self, action, param):
+        """Recarga el proceso de WebKit (útil cuando se cuelga)"""
+        if hasattr(self.main_window, 'sidebar_right'):
+            self.main_window.sidebar_right.reload_webview()
+            self.main_window.show_info("WebKit recargado")
+        else:
+            self.main_window.show_error("No hay preview disponible")
+
     def _on_validate_epub(self, action, param):
         """Muestra el diálogo de validación EPUB"""
         if not self.main_window.core:
@@ -636,9 +782,16 @@ class ActionManager:
             show_epubcheck_dialog(self.main_window)
 
     def _on_search_in_document(self, action, param):
-        """Maneja la acción de búsqueda en documento"""
+        """Maneja la acción de búsqueda en documento (solo búsqueda, sin reemplazo)"""
         if hasattr(self.main_window, 'central_editor'):
-            self.main_window.central_editor.toggle_search_panel()
+            self.main_window.central_editor.show_search_panel(show_replace=False)
+        else:
+            self.main_window.show_info("No hay editor activo")
+
+    def _on_search_and_replace(self, action, param):
+        """Maneja la acción de búsqueda y reemplazo"""
+        if hasattr(self.main_window, 'central_editor'):
+            self.main_window.central_editor.show_search_replace_panel()
         else:
             self.main_window.show_info("No hay editor activo")
 
@@ -651,3 +804,82 @@ class ActionManager:
         """Maneja la acción de resultado anterior de búsqueda"""
         if hasattr(self.main_window, 'central_editor'):
             self.main_window.central_editor._on_search_prev()
+
+    def _on_save_current(self, action, param):
+        """Guarda el archivo actual"""
+        if hasattr(self.main_window, 'central_editor') and self.main_window.central_editor:
+            self.main_window.central_editor.force_save()
+        else:
+            self.main_window.show_info("No hay archivo para guardar")
+
+    def _on_wrap_paragraph(self, action, param):
+        """Convierte la selección en párrafo HTML"""
+        if hasattr(self.main_window, 'central_editor') and self.main_window.central_editor:
+            self.main_window.central_editor._on_wrap_paragraph(action, param)
+
+    def _on_wrap_h1(self, action, param):
+        """Convierte la selección en encabezado H1"""
+        if hasattr(self.main_window, 'central_editor') and self.main_window.central_editor:
+            self.main_window.central_editor._on_wrap_heading(action, param, 1)
+
+    def _on_wrap_h2(self, action, param):
+        """Convierte la selección en encabezado H2"""
+        if hasattr(self.main_window, 'central_editor') and self.main_window.central_editor:
+            self.main_window.central_editor._on_wrap_heading(action, param, 2)
+
+    def _on_wrap_h3(self, action, param):
+        """Convierte la selección en encabezado H3"""
+        if hasattr(self.main_window, 'central_editor') and self.main_window.central_editor:
+            self.main_window.central_editor._on_wrap_heading(action, param, 3)
+
+    def _on_wrap_blockquote(self, action, param):
+        """Convierte la selección en cita HTML"""
+        if hasattr(self.main_window, 'central_editor') and self.main_window.central_editor:
+            self.main_window.central_editor._on_wrap_blockquote(action, param)
+
+    def _on_link_styles(self, action, param):
+        """Abre el diálogo para vincular estilos CSS"""
+        if hasattr(self.main_window, 'central_editor') and self.main_window.central_editor:
+            self.main_window.central_editor._on_link_styles(action, param)
+
+    def _on_show_statistics(self, action, param):
+        """Muestra el diálogo de estadísticas del libro completo"""
+        from .statistics_dialog import show_statistics_dialog
+        show_statistics_dialog(self.main_window, current_chapter_only=False)
+
+    def _on_show_current_chapter_statistics(self, action, param):
+        """Muestra las estadísticas solo del capítulo actual"""
+        from .statistics_dialog import show_statistics_dialog
+        show_statistics_dialog(self.main_window, current_chapter_only=True)
+
+    def _on_batch_rename(self, action, param):
+        """Muestra el diálogo de renombrado en lote"""
+        from .batch_rename_dialog import show_batch_rename_dialog
+        show_batch_rename_dialog(self.main_window)
+
+    def _on_split_chapter(self, action, param):
+        """Divide el capítulo actual en dos archivos"""
+        from .split_chapter_dialog import show_split_chapter_dialog
+        show_split_chapter_dialog(self.main_window)
+
+    def _on_global_search_replace(self, action, param):
+        """Muestra el diálogo de búsqueda/reemplazo global"""
+        from .global_search_replace_dialog import show_global_search_replace_dialog
+        show_global_search_replace_dialog(self.main_window)
+
+    def _on_toggle_left_sidebar(self, action, param):
+        """Alterna la visibilidad del panel lateral izquierdo"""
+        if hasattr(self.main_window, 'left_sidebar_btn'):
+            self.main_window.left_sidebar_btn.set_active(
+                not self.main_window.left_sidebar_btn.get_active())
+
+    def _on_toggle_right_sidebar(self, action, param):
+        """Alterna la visibilidad del panel lateral derecho"""
+        if hasattr(self.main_window, 'right_sidebar_btn'):
+            self.main_window.right_sidebar_btn.set_active(
+                not self.main_window.right_sidebar_btn.get_active())
+
+    def _on_fullscreen_preview(self, action, param):
+        """Abre la previsualización en pantalla completa"""
+        if hasattr(self.main_window, 'sidebar_right') and self.main_window.sidebar_right:
+            self.main_window.sidebar_right._on_fullscreen_preview(None)

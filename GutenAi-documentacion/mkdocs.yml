@@ -3,6 +3,8 @@ nav:
   - Inicio: docs/index.md
   - Guía de Usuario:
       - Uso de GutenAI: docs/usuario/guia.md
+      - Atajos de Teclado: docs/usuario/atajos.md
+      - Estructura del EPUB: docs/usuario/estructura_epub.md
   - Referencia Técnica:
       - Manual del Desarrollador: docs/referencia/manual.md
   - Arquitectura:

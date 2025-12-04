@@ -276,13 +276,18 @@ class DynamicStyleContextMenu:
             css_styles = self.style_manager.get_available_styles_for_document(
                 self.main_window.current_resource
             )
-            
+
             if css_styles:
                 self._add_css_styles_to_menu(menu, css_styles, selected_text)
             else:
                 # Fallback: elementos HTML básicos
                 self._add_basic_html_elements(menu)
-        
+
+        # Sección de gestión de documentos (siempre visible)
+        document_section = Gio.Menu()
+        document_section.append("✂️ Dividir capítulo aquí", "win.split_chapter")
+        menu.append_section("Documento", document_section)
+
         # Mostrar popover con tamaño controlado
         popover = Gtk.PopoverMenu()
         popover.set_menu_model(menu)

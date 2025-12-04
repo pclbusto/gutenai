@@ -1,3 +1,4 @@
 # Guten.AI Dependencies
 ebooklib>=0.18
 PyGObject>=3.42.0
+beautifulsoup4>=4.9.0
