@@ -114,7 +114,16 @@ class SidebarRight:
         try:
             settings = self.web_view.get_settings()
             settings.set_enable_javascript(True)
-            settings.set_enable_developer_extras(False)
+            # Habilitar herramientas de desarrollo para depuración
+            settings.set_enable_developer_extras(True)
+            # Intentar habilitar logs en consola si es posible
+            if hasattr(settings, 'set_enable_write_console_messages_to_stdout'):
+                settings.set_enable_write_console_messages_to_stdout(True)
+
+            # Configurar puente de mensajería (JS -> Python)
+            content_manager = self.web_view.get_user_content_manager()
+            content_manager.register_script_message_handler("gutenai")
+            content_manager.connect("script-message-received::gutenai", self._on_script_message)
 
             # Conectar señales de error
             self.web_view.connect('load-failed', self._on_load_failed)
@@ -133,6 +142,53 @@ class SidebarRight:
             print("[WebView] HTML de prueba cargado")
         except Exception as e:
             print(f"[WebView] Error agregando WebView al contenedor: {e}")
+
+    def _on_script_message(self, content_manager, js_result):
+        """Maneja mensajes recibidos desde JavaScript"""
+        try:
+            # Compatibilidad WebKit 6.0 vs 4.x
+            # En WebKit 6.0, js_result ya es un JSC.Value
+            # En WebKit 4.x, es un JavascriptResult que tiene get_js_value()
+            if hasattr(js_result, 'get_js_value'):
+                value = js_result.get_js_value()
+            else:
+                value = js_result
+
+            # Parsear JSON manual
+            import json
+            try:
+                # Obtener representación JSON del valor
+                message_str = value.to_json(0)
+                data = json.loads(message_str)
+                
+                # Si el resultado sigue siendo un string (porque JS envió JSON.stringify),
+                # parsear nuevamente
+                if isinstance(data, str):
+                    try:
+                        data = json.loads(data)
+                    except:
+                        pass
+            except Exception as e:
+                print(f"[ReverseSync] Error decodificando JSON: {e}")
+                data = {}
+
+            print(f"[ReverseSync] Mensaje procesado: {type(data)} -> {data}")
+            
+            if isinstance(data, dict) and data.get('type') == 'click_sync':
+                element_id = data.get('id')
+                text_snippet = data.get('text')
+                
+                if element_id:
+                    print(f"[ReverseSync] Sincronizando por ID: {element_id}")
+                    self.main_window.central_editor.scroll_to_element_by_id(element_id)
+                elif text_snippet:
+                    print(f"[ReverseSync] Sincronizando por texto: {text_snippet}")
+                    self.main_window.central_editor.scroll_to_text(text_snippet)
+                    
+        except Exception as e:
+            print(f"[ReverseSync] Error procesando mensaje: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _on_load_failed(self, web_view, load_event, failing_uri, error):
         """Maneja errores de carga de WebKit"""
@@ -247,6 +303,12 @@ class SidebarRight:
                 # Mostrar advertencia pero intentar cargar de todos modos
                 print(f"[Preview] Advertencia HTML: {validation_result['error']}")
 
+            # INYECTAR CSS DE MARCADORES DE ANCLAJE (hooks)
+            html_content = self._inject_hook_markers_css(html_content)
+            
+            # INYECTAR JS DE SINCRONIZACIÓN INVERSA
+            html_content = self._inject_reverse_sync_js(html_content)
+
             # Crear archivo de preview dedicado (no sobreescribir el original)
             preview_file_path = self._get_preview_file_path(href)
             print(f"[Preview] Ruta de preview: {preview_file_path}")
@@ -278,6 +340,120 @@ class SidebarRight:
             # Fallback: HTML inline
             error_msg = f"<p>Error en preview: {e}</p>"
             self.web_view.load_html(error_msg, None)
+
+    def _inject_hook_markers_css(self, html_content: str) -> str:
+        """
+        Inyecta CSS para mostrar marcadores visuales (⚓) en elementos con id
+
+        Los marcadores son sutiles y no afectan el layout:
+        - Aparecen como ::before pseudo-element
+        - Solo visibles en hover
+        - Color gris claro
+        - No se imprimen
+        """
+        hook_marker_css = """
+<style id="gutenai-hook-markers">
+/* GutenAI: Marcadores visuales de anclajes (hooks) */
+*[id]::before {
+    content: "⚓";
+    position: absolute;
+    left: -20px;
+    opacity: 0;
+    color: #999;
+    font-size: 0.8em;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+*[id]:hover::before {
+    opacity: 0.6;
+}
+
+/* Asegurar que elementos con id tengan position relative */
+*[id] {
+    position: relative;
+}
+
+/* Ocultar en impresión */
+@media print {
+    *[id]::before {
+        display: none !important;
+    }
+}
+</style>
+"""
+        # Inyectar antes de </head> si existe, sino antes de <body>
+        if '</head>' in html_content:
+            html_content = html_content.replace('</head>', f'{hook_marker_css}\n</head>')
+        elif '<body' in html_content:
+            html_content = html_content.replace('<body', f'{hook_marker_css}\n<body')
+        else:
+            # Fallback: agregar al inicio
+            html_content = hook_marker_css + '\n' + html_content
+
+        return html_content
+
+    def _inject_reverse_sync_js(self, html_content: str) -> str:
+        """Inyecta JavaScript para detectar clics y enviarlos a Python"""
+        print("[ReverseSync] Inyectando JS en el HTML...")
+        # Nota: Usamos CDATA para evitar errores de parseo XML con caracteres como '&' (&&)
+        sync_js = """
+<script type="text/javascript" id="gutenai-reverse-sync">
+//<![CDATA[
+(function() {
+    // Evitar múltiples inyecciones
+    if (window.gutenaiSyncInjected) return;
+    window.gutenaiSyncInjected = true;
+    console.log("[GutenAI] JS Injected and Ready");
+
+    document.addEventListener('click', function(e) {
+        // console.log("[GutenAI] Click detected on", e.target.tagName);
+        
+        let target = e.target;
+        
+        // Removed visual feedback
+        let foundId = null;
+        let foundText = target.innerText ? target.innerText.substring(0, 100) : "";
+
+        // Buscar ID en el elemento o sus padres
+        while (target && target !== document.body) {
+            if (target.id && !target.id.startsWith('gutenai-')) {
+                foundId = target.id;
+                break;
+            }
+            target = target.parentElement;
+        }
+        
+        console.log("[GutenAI] Sending message. ID:", foundId, "Text:", foundText.substring(0, 20));
+        
+        // Enviar mensaje a Python
+        if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.gutenai) {
+            try {
+                window.webkit.messageHandlers.gutenai.postMessage(JSON.stringify({
+                    type: 'click_sync',
+                    id: foundId,
+                    tag: target ? target.tagName : null,
+                    text: foundText
+                }));
+            } catch(err) {
+                console.error("[GutenAI] Error sending message:", err);
+            }
+        } else {
+            console.error("[GutenAI] WebKit message handler not found!");
+            alert("Error: WebKit bridge broken");
+        }
+    });
+})();
+//]]>
+</script>
+"""
+        # Inyectar antes de </body>
+        if '</body>' in html_content:
+            html_content = html_content.replace('</body>', f'{sync_js}\n</body>')
+        else:
+            html_content += sync_js
+            
+        return html_content
 
     def _validate_html_basic(self, html: str) -> dict:
         """Validación básica de HTML para detectar problemas graves"""

@@ -60,6 +60,16 @@ class GutenAIWindow(Adw.ApplicationWindow):
         # Gestores de funcionalidad
         self.action_manager = ActionManager(self)
         self.dialog_manager = DialogManager(self)
+        
+        # Configurar overlay de ayuda (F1)
+        from .shortcuts_window import create_shortcuts_window
+        print("[DEBUG] Creando help overlay...")
+        help_overlay = create_shortcuts_window(self)
+        if help_overlay:
+            print("[DEBUG] Estableciendo help overlay en la ventana")
+            self.set_help_overlay(help_overlay)
+        else:
+            print("[DEBUG] No se pudo crear help overlay")
 
         # Diálogo About
         self.about_dialog = AboutDialog(self)
@@ -233,9 +243,10 @@ class GutenAIWindow(Adw.ApplicationWindow):
                 return True
 
         # F1 - Mostrar atajos
-        elif keyval == Gdk.KEY_F1:
-            self.action_manager._on_show_shortcuts(None, None)
-            return True
+        # Manejado automáticamente por set_help_overlay
+        # elif keyval == Gdk.KEY_F1:
+        #     self.action_manager._on_show_shortcuts(None, None)
+        #     return True
 
         return False  # Permitir que el evento continúe
 

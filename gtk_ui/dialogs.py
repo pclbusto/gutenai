@@ -441,47 +441,8 @@ p {
         dialog.add_response("ok", "Aceptar")
         dialog.present(self.main_window)
 
-    def show_shortcuts_window(self):
-        """Muestra la ventana moderna de atajos de teclado libadwaita"""
-        try:
-            from .shortcuts_window import show_shortcuts_window
-            show_shortcuts_window(self.main_window)
-        except Exception as e:
-            print(f"Error cargando ventana de atajos libadwaita: {e}")
-            self._show_shortcuts_fallback()
-    
-    def _show_shortcuts_fallback(self):
-        """Fallback: muestra atajos básicos en un diálogo simple"""
-        shortcuts_text = """Atajos de teclado principales:
-
-    📁 ARCHIVO:
-    • Ctrl+O: Abrir EPUB
-    • Ctrl+Shift+O: Abrir carpeta proyecto  
-    • Ctrl+N: Nuevo proyecto
-    • Ctrl+S: Guardar cambios
-    • Ctrl+Shift+E: Exportar EPUB
-
-    ✏️ FORMATO HTML:
-    • Ctrl+P: Convertir a párrafo
-    • Ctrl+1/2/3: Encabezados H1/H2/H3
-    • Ctrl+Shift+Q: Cita (blockquote)
-    • Ctrl+L: Vincular estilos CSS
-
-    🧭 NAVEGACIÓN:
-    • Ctrl+Shift+1: Mostrar/ocultar estructura
-    • Ctrl+Shift+2: Mostrar/ocultar previsualización
-    • F11: Previsualización pantalla completa
-    • Ctrl+G: Generar navegación (TOC)
-
-    ❓ AYUDA:
-    • Ctrl+?: Mostrar atajos
-    • Ctrl+Shift+P: Preferencias"""
-
-        dialog = Adw.AlertDialog()
-        dialog.set_heading("Atajos de teclado")
-        dialog.set_body(shortcuts_text)
-        dialog.add_response("ok", "Cerrar")
-        dialog.present(self.main_window)
+    # Los métodos show_shortcuts_window y _show_shortcuts_fallback han sido eliminados
+    # ya que se utiliza el sistema nativo de GTK4/Libadwaita (set_help_overlay)
 
     def show_batch_style_linking_dialog(self, selected_hrefs):
         """Muestra diálogo para vincular estilos a múltiples documentos"""

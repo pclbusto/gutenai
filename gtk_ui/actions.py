@@ -62,10 +62,10 @@ class ActionManager:
         gen_nav_action.connect("activate", self._on_generate_nav)
         self.main_window.add_action(gen_nav_action)
         
-        # Mostrar atajos
-        shortcuts_action = Gio.SimpleAction.new("show_shortcuts", None)
-        shortcuts_action.connect("activate", self._on_show_shortcuts)
-        self.main_window.add_action(shortcuts_action)
+        # Mostrar atajos - Eliminado (se usa set_help_overlay nativo)
+        # shortcuts_action = Gio.SimpleAction.new("show_shortcuts", None)
+        # shortcuts_action.connect("activate", self._on_show_shortcuts)
+        # self.main_window.add_action(shortcuts_action)
 
         # Acciones de recursos
         create_doc_action = Gio.SimpleAction.new("create_document", None)
@@ -220,7 +220,7 @@ class ActionManager:
         app.set_accels_for_action("win.generate_nav", ["<Ctrl>g"])
         
         # Atajos de ayuda
-        app.set_accels_for_action("win.show_shortcuts", ["F1"])  # Solo F1 por ahora
+        app.set_accels_for_action("win.show-help-overlay", ["F1"])  # Mapear explícitamente F1 al help overlay estándar
         app.set_accels_for_action("win.preferences", ["<Ctrl><Shift>p"])
         app.set_accels_for_action("win.validate_epub", ["<Ctrl><Shift>v"])
         app.set_accels_for_action("win.reload_webkit", ["F5"])  # Recargar previsualización
@@ -248,9 +248,9 @@ class ActionManager:
         app.set_accels_for_action("win.show_current_chapter_statistics", ["F6"])
         app.set_accels_for_action("win.show_statistics", ["<Ctrl>F6"])
     
-    def _on_show_shortcuts(self, action, param):
-        """Muestra la ventana de atajos"""
-        self.main_window.dialog_manager.show_shortcuts_window()
+    # def _on_show_shortcuts(self, action, param):
+    #     """Muestra la ventana de atajos"""
+    #     self.main_window.dialog_manager.show_shortcuts_window()
     
     def _on_open_epub(self, action, param):
         """Abre un archivo EPUB existente"""

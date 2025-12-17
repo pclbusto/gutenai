@@ -69,6 +69,7 @@ class CentralEditor:
         self.editor_scroll.set_hexpand(True)
 
         # Crear controladores de eventos antes del panel de búsqueda
+        # IMPORTANTE: NO usar CAPTURE phase para no bloquear la escritura en el editor
         self.key_controller = Gtk.EventControllerKey()
         self.key_controller.connect('key-pressed', self._on_key_pressed)
         self.source_view.add_controller(self.key_controller)
@@ -151,7 +152,16 @@ class CentralEditor:
             # Indicador visual sutil
             self._show_save_indicator()
 
-            # NUEVO: Si estamos editando CSS, actualizar preview del HTML actual
+            # ACTUALIZACIÓN DEL ÍNDICE DE HOOKS (solo para archivos HTML)
+            if (self.current_resource_type == KIND_DOCUMENT and
+                self.main_window.core and
+                hasattr(self.main_window.core, 'hook_index')):
+                # Re-indexar archivo actual de forma reactiva
+                self.main_window.core.hook_index.update_file_index(
+                    self.main_window.current_resource
+                )
+
+            # Si estamos editando CSS, actualizar preview del HTML actual
             if self.current_resource_type == KIND_STYLE:
                 self._refresh_html_preview_after_css_change()
 
@@ -186,6 +196,18 @@ class CentralEditor:
         """Carga un recurso en el editor"""
         if not self.main_window.core:
             return
+
+        # EVENTO FOCUSOUT: Al cambiar de archivo, re-indexar el anterior si era HTML
+        if (self.main_window.current_resource and
+            self.main_window.current_resource != href and
+            self.current_resource_type == KIND_DOCUMENT and
+            hasattr(self.main_window.core, 'hook_index')):
+            # Forzar guardado antes de cambiar
+            self.force_save()
+            # Re-indexar el archivo que estamos dejando
+            self.main_window.core.hook_index.update_file_index(
+                self.main_window.current_resource
+            )
 
         try:
             # Caso especial: archivo OPF (content.opf, package.opf, etc.)
@@ -270,16 +292,29 @@ class CentralEditor:
             self.source_buffer.set_style_scheme(scheme)
     
     def _setup_context_menu(self):
-        """Configura el menú contextual del editor"""
-        
-        menu_model = self._create_context_menu_model()
-        self.source_view.set_extra_menu(menu_model)
-        from .css_style_context_menu import integrate_dynamic_css_menu
-        integrate_dynamic_css_menu(self)
+        """Configura el menú contextual del editor con popover personalizado"""
+
+        # Crear el popover PRIMERO (antes de integrar módulos externos)
+        self._create_context_popover()
+
+        # Integrar módulos externos (SIN que agreguen sus propios controladores)
+        # Estos módulos ahora solo proporcionan funcionalidad, no controles de UI
         from .image_selector_dialog import integrate_image_selector_with_editor
         integrate_image_selector_with_editor(self)
         from .correction_modal import integrate_correction_modal_with_editor
         integrate_correction_modal_with_editor(self)
+        from .smart_hook_inserter import integrate_smart_hook_inserter
+        integrate_smart_hook_inserter(self)
+
+        # IMPORTANTE: No llamamos a integrate_dynamic_css_menu porque
+        # ahora nuestro popover maneja todo el menú contextual
+
+        # Crear controlador de gestos para clic derecho AL FINAL
+        # Esto asegura que sea el último en la cadena y tenga prioridad
+        self.right_click_gesture = Gtk.GestureClick(button=3)  # Botón derecho
+        self.right_click_gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        self.right_click_gesture.connect('pressed', self._on_right_click)
+        self.source_view.add_controller(self.right_click_gesture)
 
     
     def _create_context_menu_model(self):
@@ -324,6 +359,224 @@ class CentralEditor:
         # menu.append_section("Edición", edit_section)
 
         return menu
+
+    def _create_context_popover(self):
+        """Crea el popover personalizado con botones en grilla"""
+        from gi.repository import Adw
+
+        # Crear el popover
+        self.context_popover = Gtk.Popover()
+        self.context_popover.set_position(Gtk.PositionType.BOTTOM)
+        self.context_popover.set_has_arrow(True)
+
+        # Contenedor principal con padding
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        main_box.set_margin_top(12)
+        main_box.set_margin_bottom(12)
+        main_box.set_margin_start(12)
+        main_box.set_margin_end(12)
+
+        # Stack para manejar el menú principal y submenús
+        self.menu_stack = Gtk.Stack()
+        self.menu_stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
+        self.menu_stack.set_transition_duration(200)
+
+        # === PÁGINA PRINCIPAL ===
+        main_page = self._create_main_menu_page()
+        self.menu_stack.add_named(main_page, "main")
+
+        # === PÁGINA DE FORMATO HTML ===
+        format_page = self._create_format_submenu_page()
+        self.menu_stack.add_named(format_page, "format")
+
+        # Agregar stack al contenedor
+        main_box.append(self.menu_stack)
+
+        self.context_popover.set_child(main_box)
+
+    def _create_main_menu_page(self):
+        """Crea la página principal del menú con grilla de botones"""
+        page_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        # Título
+        title_label = Gtk.Label()
+        title_label.set_markup("<b>Herramientas de edición</b>")
+        title_label.set_halign(Gtk.Align.START)
+        page_box.append(title_label)
+
+        # Grilla de botones (3 columnas)
+        grid = Gtk.Grid()
+        grid.set_row_spacing(8)
+        grid.set_column_spacing(8)
+        grid.set_column_homogeneous(True)
+
+        # Fila 0: Formato HTML, Estilos, IA
+        format_btn = self._create_grid_button("Format HTML", "text-x-generic-symbolic", "format")
+        styles_btn = self._create_grid_button("Vincular CSS", "applications-graphics-symbolic", None, self._on_link_styles)
+        ai_btn = self._create_grid_button("Asistente IA", "system-run-symbolic", None, self._on_ai_correction_action)
+
+        grid.attach(format_btn, 0, 0, 1, 1)
+        grid.attach(styles_btn, 1, 0, 1, 1)
+        grid.attach(ai_btn, 2, 0, 1, 1)
+
+        # Fila 1: Dividir capítulo, Insertar imagen, Crear Hook
+        split_btn = self._create_grid_button("Dividir capítulo", "edit-cut-symbolic", None, self._on_split_chapter_action)
+        image_btn = self._create_grid_button("Insertar imagen", "insert-image-symbolic", None, self._on_insert_image_action)
+        hook_btn = self._create_grid_button("Crear Hook ⚓", "insert-link-symbolic", None, self._on_insert_hook_action)
+
+        grid.attach(split_btn, 0, 1, 1, 1)
+        grid.attach(image_btn, 1, 1, 1, 1)
+        grid.attach(hook_btn, 2, 1, 1, 1)
+
+        page_box.append(grid)
+
+        return page_box
+
+    def _create_format_submenu_page(self):
+        """Crea la página de submenú de formato HTML"""
+        page_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        # Botón de volver
+        back_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        back_btn = Gtk.Button()
+        back_btn.set_icon_name("go-previous-symbolic")
+        back_btn.set_tooltip_text("Volver")
+        back_btn.connect('clicked', lambda w: self.menu_stack.set_visible_child_name("main"))
+        back_box.append(back_btn)
+
+        back_label = Gtk.Label()
+        back_label.set_markup("<b>Formato HTML</b>")
+        back_label.set_hexpand(True)
+        back_label.set_halign(Gtk.Align.START)
+        back_box.append(back_label)
+
+        page_box.append(back_box)
+
+        # Grilla de opciones de formato
+        grid = Gtk.Grid()
+        grid.set_row_spacing(8)
+        grid.set_column_spacing(8)
+        grid.set_column_homogeneous(True)
+
+        # Fila 0: Párrafo, H1, H2
+        p_btn = self._create_grid_button("Párrafo", "text-x-generic-symbolic", None, self._on_wrap_paragraph_action)
+        h1_btn = self._create_grid_button("H1", "format-text-larger-symbolic", None, lambda *a: self._on_wrap_heading(None, None, 1))
+        h2_btn = self._create_grid_button("H2", "format-text-large-symbolic", None, lambda *a: self._on_wrap_heading(None, None, 2))
+
+        grid.attach(p_btn, 0, 0, 1, 1)
+        grid.attach(h1_btn, 1, 0, 1, 1)
+        grid.attach(h2_btn, 2, 0, 1, 1)
+
+        # Fila 1: H3, Blockquote
+        h3_btn = self._create_grid_button("H3", "format-text-bold-symbolic", None, lambda *a: self._on_wrap_heading(None, None, 3))
+        quote_btn = self._create_grid_button("Cita", "format-quote-symbolic", None, self._on_wrap_blockquote_action)
+
+        grid.attach(h3_btn, 0, 1, 1, 1)
+        grid.attach(quote_btn, 1, 1, 1, 1)
+
+        page_box.append(grid)
+
+        return page_box
+
+    def _create_grid_button(self, label_text, icon_name, submenu_page=None, action_callback=None):
+        """Crea un botón grande para la grilla
+
+        Args:
+            label_text: Texto del botón
+            icon_name: Nombre del icono
+            submenu_page: Si se especifica, el botón navegará a esta página del stack (sin cerrar el popover)
+            action_callback: Si se especifica, el botón ejecutará esta función (y cerrará el popover)
+        """
+        button = Gtk.Button()
+        button.set_size_request(120, 80)
+
+        # Box vertical con icono y texto
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.set_halign(Gtk.Align.CENTER)
+        box.set_valign(Gtk.Align.CENTER)
+
+        # Icono
+        icon = Gtk.Image.new_from_icon_name(icon_name)
+        icon.set_pixel_size(32)
+        box.append(icon)
+
+        # Label
+        label = Gtk.Label(label=label_text)
+        label.set_wrap(True)
+        label.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        label.set_max_width_chars(15)
+        label.set_justify(Gtk.Justification.CENTER)
+        box.append(label)
+
+        button.set_child(box)
+
+        # Conectar acción
+        if submenu_page:
+            # Navegación a submenú SIN cerrar el popover
+            button.connect('clicked', lambda w: self.menu_stack.set_visible_child_name(submenu_page))
+        elif action_callback:
+            # Acción directa Y cerrar popover
+            def execute_and_close(widget):
+                action_callback(None, None)
+                self.context_popover.popdown()
+            button.connect('clicked', execute_and_close)
+
+        return button
+
+    def _on_right_click(self, gesture, n_press, x, y):
+        """Maneja el clic derecho para mostrar el popover"""
+        from gi.repository import Gdk
+
+        # Capturar el evento para evitar que otros controladores lo procesen
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+        # Configurar posición del popover
+        rect = Gdk.Rectangle()
+        rect.x = int(x)
+        rect.y = int(y)
+        rect.width = 1
+        rect.height = 1
+        self.context_popover.set_pointing_to(rect)
+
+        # Volver a la página principal
+        self.menu_stack.set_visible_child_name("main")
+
+        # Mostrar popover
+        self.context_popover.set_parent(self.source_view)
+        self.context_popover.popup()
+
+        return True  # Evento manejado
+
+    # Métodos wrapper para las acciones (para mantener compatibilidad)
+    def _on_wrap_paragraph_action(self, action, param):
+        """Wrapper para wrap_paragraph"""
+        self._on_wrap_paragraph(action, param)
+
+    def _on_wrap_blockquote_action(self, action, param):
+        """Wrapper para wrap_blockquote"""
+        self._on_wrap_blockquote(action, param)
+
+    def _on_split_chapter_action(self, action, param):
+        """Ejecuta la acción de dividir capítulo"""
+        if hasattr(self.main_window, 'on_split_chapter'):
+            self.main_window.on_split_chapter(action, param)
+
+    def _on_ai_correction_action(self, action, param):
+        """Ejecuta la acción del asistente IA"""
+        # Esta acción debería estar registrada en el window
+        if hasattr(self.main_window, 'activate_action'):
+            self.main_window.activate_action('ai_correction')
+
+    def _on_insert_image_action(self, action, param):
+        """Ejecuta la acción de insertar imagen"""
+        # Esta funcionalidad debería estar en image_selector_dialog
+        if hasattr(self, '_show_image_selector'):
+            self._show_image_selector()
+
+    def _on_insert_hook_action(self, action, param):
+        """Ejecuta la acción de crear hook inteligente"""
+        if hasattr(self, 'smart_hook_inserter'):
+            self.smart_hook_inserter.show_hook_insertion_dialog()
 
     def _setup_search_panel(self):
         """Configura el panel de búsqueda deslizable"""
@@ -545,6 +798,108 @@ class CentralEditor:
 
         # Leer contenido del OPF
         content = self.main_window.core.opf_path.read_text(encoding='utf-8')
+        
+        # Cargar en el editor
+        lang_manager = GtkSource.LanguageManager.get_default()
+        language = lang_manager.get_language('xml')
+        
+        self.source_buffer.set_language(language)
+        self.source_buffer.set_text(content)
+        
+        # Limpiar preview
+        self.main_window.sidebar_right.web_view.load_html("", None)
+
+    def scroll_to_element_by_id(self, element_id: str):
+        """Desplaza el editor al elemento con el ID especificado"""
+        if not element_id:
+            return
+            
+        # Buscar patrón id="element_id"
+        buffer = self.source_buffer
+        start_iter = buffer.get_start_iter()
+        
+        # Intentar varias variaciones de comillas
+        patterns = [
+            f'id="{element_id}"',
+            f"id='{element_id}'",
+            f'id={element_id}'
+        ]
+        
+        found = False
+        match_start = None
+        match_end = None
+        
+        for pattern in patterns:
+            found_tuple = start_iter.forward_search(
+                pattern,
+                GtkSource.SearchFlags.CASE_INSENSITIVE,
+                None
+            )
+            if found_tuple:
+                match_start, match_end = found_tuple
+                found = True
+                break
+        
+        if found and match_start:
+            # Scroll al lugar
+            self.source_view.scroll_to_iter(match_start, 0.0, True, 0.0, 0.5)
+            
+            # Resaltar o seleccionar
+            buffer.select_range(match_start, match_end)
+            
+            # Foco al editor
+            self.source_view.grab_focus()
+
+    def scroll_to_text(self, text: str):
+        """Desplaza el editor a la primera ocurrencia del texto usando búsqueda difusa"""
+        if not text or len(text) < 5:
+            return
+            
+        import re
+            
+        # Limpiar texto de entrada
+        clean_text = " ".join(text.split()).strip()
+        if not clean_text:
+            return
+            
+        # Preparar patrón regex flexible con los espacios
+        # Escapar caracteres especiales pero reemplazar espacios con \s+ (cualquier espacio en blanco)
+        escaped_text = re.escape(clean_text)
+        # Recuperar la flexibilidad de espacios: reemplazar los espacios escapados (\ ) por \s+
+        search_pattern = escaped_text.replace(r'\ ', r'\s+')
+        
+        # Obtener todo el texto del buffer para buscar con regex de Python
+        buffer = self.source_buffer
+        start_iter = buffer.get_start_iter()
+        end_iter = buffer.get_end_iter()
+        full_content = buffer.get_text(start_iter, end_iter, False)
+        
+        # Buscar
+        match = re.search(search_pattern, full_content, re.IGNORECASE | re.MULTILINE)
+        
+        # Fallback: si no encuentra, intentar con una porción más pequeña (primeros 30 chars)
+        if not match and len(clean_text) > 30:
+            short_text = clean_text[:30]
+            escaped_short = re.escape(short_text)
+            short_pattern = escaped_short.replace(r'\ ', r'\s+')
+            match = re.search(short_pattern, full_content, re.IGNORECASE | re.MULTILINE)
+            
+        if match:
+            match_start_offset = match.start()
+            match_end_offset = match.end()
+            
+            # Convertir offset a iterador
+            match_start = buffer.get_iter_at_offset(match_start_offset)
+            match_end = buffer.get_iter_at_offset(match_end_offset)
+            
+            # Scroll al lugar
+            self.source_view.scroll_to_iter(match_start, 0.0, True, 0.0, 0.5)
+            
+            # Seleccionar (sutilmente si es posible, o solo el cursor)
+            buffer.select_range(match_start, match_end)
+            
+            # Foco al editor
+            self.source_view.grab_focus()
 
         # Configurar resaltado de sintaxis XML
         lang_manager = GtkSource.LanguageManager.get_default()

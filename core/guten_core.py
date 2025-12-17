@@ -214,6 +214,10 @@ class GutenCore:
         self.items_by_id: Dict[str, ManifestItem] = {}
         self.items_by_href: Dict[str, ManifestItem] = {}
 
+        # Sistema de hooks (índice de id's en HTML)
+        from .hook_index_manager import HookIndexManager
+        self.hook_index = HookIndexManager(self)
+
     # -------------------------
     # Proyecto / apertura
     # -------------------------
@@ -347,6 +351,12 @@ class GutenCore:
             mi = ManifestItem(mid, href, mt, props)
             self.items_by_id[mid] = mi
             self.items_by_href[href] = mi
+
+        # Construir índice de hooks inicial (lazy/async si el proyecto es grande)
+        # Por ahora lo hacemos síncrono en el hilo principal
+        stats = self.hook_index.build_full_index()
+        print(f"[HookIndex] Indexados {stats['files_indexed']} archivos, "
+              f"{stats['hooks_found']} hooks en {stats['time_ms']}ms")
 
     # -------------------------
     # Inventario y metadata
