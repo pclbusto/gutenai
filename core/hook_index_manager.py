@@ -104,10 +104,10 @@ class HookIndexManager:
         """Obtiene lista de todos los archivos HTML/XHTML del manifest"""
         html_files = []
 
-        if not self.core or not hasattr(self.core, 'manifest'):
+        if not self.core or not hasattr(self.core, 'items_by_id'):
             return html_files
 
-        for item in self.core.manifest.values():
+        for item in self.core.items_by_id.values():
             media_type = (item.media_type or "").lower()
             href = item.href
 

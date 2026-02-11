@@ -3,11 +3,13 @@ ui/central_editor.py - Auto-guardado corregido
 """
 from . import *
 
-from gi.repository import Gtk, GtkSource, Gio, GLib
+from gi.repository import Gtk, GtkSource, Gio, GLib, Gdk
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 from core.guten_core import KIND_DOCUMENT, KIND_STYLE
+
+from .css_style_context_menu import CSSStyleManager
 
 if TYPE_CHECKING:
     from .main_window import GutenAIWindow
@@ -19,6 +21,7 @@ class CentralEditor:
     def __init__(self, main_window: 'GutenAIWindow'):
         self.main_window = main_window
         self.current_resource_type: Optional[str] = None
+        self.css_manager = CSSStyleManager(self.main_window)
         
         # Estado del auto-guardado
         self._save_timeout = None
@@ -73,6 +76,12 @@ class CentralEditor:
         self.key_controller = Gtk.EventControllerKey()
         self.key_controller.connect('key-pressed', self._on_key_pressed)
         self.source_view.add_controller(self.key_controller)
+        
+        # GestureClick para Ctrl+Click (Go to Definition)
+        self.click_gesture = Gtk.GestureClick()
+        self.click_gesture.set_button(1)  # Botón izquierdo
+        self.click_gesture.connect('pressed', self._on_ctrl_click)
+        self.source_view.add_controller(self.click_gesture)
 
         self.search_key_controller = Gtk.EventControllerKey()
         self.search_key_controller.connect('key-pressed', self._on_key_pressed)
@@ -305,6 +314,8 @@ class CentralEditor:
         integrate_correction_modal_with_editor(self)
         from .smart_hook_inserter import integrate_smart_hook_inserter
         integrate_smart_hook_inserter(self)
+        from .smart_link_inserter import integrate_smart_link_inserter
+        integrate_smart_link_inserter(self)
 
         # IMPORTANTE: No llamamos a integrate_dynamic_css_menu porque
         # ahora nuestro popover maneja todo el menú contextual
@@ -366,6 +377,7 @@ class CentralEditor:
 
         # Crear el popover
         self.context_popover = Gtk.Popover()
+        self.context_popover.set_parent(self.source_view)
         self.context_popover.set_position(Gtk.PositionType.BOTTOM)
         self.context_popover.set_has_arrow(True)
 
@@ -388,6 +400,10 @@ class CentralEditor:
         # === PÁGINA DE FORMATO HTML ===
         format_page = self._create_format_submenu_page()
         self.menu_stack.add_named(format_page, "format")
+
+        # === PÁGINA DE SUBMENÚ HOOKS ===
+        hooks_page = self._create_hooks_submenu_page()
+        self.menu_stack.add_named(hooks_page, "hooks")
 
         # Agregar stack al contenedor
         main_box.append(self.menu_stack)
@@ -419,16 +435,19 @@ class CentralEditor:
         grid.attach(styles_btn, 1, 0, 1, 1)
         grid.attach(ai_btn, 2, 0, 1, 1)
 
-        # Fila 1: Dividir capítulo, Insertar imagen, Crear Hook
+
+        page_box.append(grid)
+        
+        # Fila 1: Dividir capítulo, Insertar imagen, Crear Hook (AHORA SUBMENÚ)
         split_btn = self._create_grid_button("Dividir capítulo", "edit-cut-symbolic", None, self._on_split_chapter_action)
         image_btn = self._create_grid_button("Insertar imagen", "insert-image-symbolic", None, self._on_insert_image_action)
-        hook_btn = self._create_grid_button("Crear Hook ⚓", "insert-link-symbolic", None, self._on_insert_hook_action)
+        hook_btn = self._create_grid_button("Hooks ⚓", "insert-link-symbolic", "hooks")  # Abre submenú
 
         grid.attach(split_btn, 0, 1, 1, 1)
         grid.attach(image_btn, 1, 1, 1, 1)
         grid.attach(hook_btn, 2, 1, 1, 1)
 
-        page_box.append(grid)
+        return page_box
 
         return page_box
 
@@ -452,27 +471,180 @@ class CentralEditor:
 
         page_box.append(back_box)
 
-        # Grilla de opciones de formato
+        # Contenedor para el contenido dinámico
+        # Usamos ScrolledWindow por si hay muchos estilos
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_vexpand(True)
+        scrolled.set_propagate_natural_height(True)
+        
+        # El contenido real va aquí
+        self.format_page_content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        
+        scrolled.set_child(self.format_page_content)
+        page_box.append(scrolled)
+
+        # Llenar inicialmente
+        self._rebuild_format_page()
+
+        return page_box
+
+    def _rebuild_format_page(self):
+        """Reconstruye dinámicamente el menú de formato basado en CSS"""
+        # Limpiar contenido anterior
+        while True:
+            child = self.format_page_content.get_first_child()
+            if not child:
+                break
+            self.format_page_content.remove(child)
+
+        # Obtener estilos disponibles
+        if self.main_window.current_resource:
+            css_styles = self.css_manager.get_available_styles_for_document(
+                self.main_window.current_resource
+            )
+        else:
+            css_styles = {}
+
+        # Mapeo de elementos
+        display_names = {
+            'p': 'Párrafo', 'h1': 'H1', 'h2': 'H2', 'h3': 'H3', 
+            'h4': 'H4', 'blockquote': 'Cita', 'ul': 'Lista', 'ol': 'Lista Num.'
+        }
+        
+        # Grid para disposición compacta
+        grid = Gtk.Grid()
+        grid.set_row_spacing(8)
+        grid.set_column_spacing(8)
+        grid.set_column_homogeneous(True)
+        self.format_page_content.append(grid)
+        
+        row = 0
+        col = 0
+        MAX_COLS = 3
+
+        # Función helper para agregar botones
+        def add_btn(label, icon, callback):
+            nonlocal row, col
+            btn = self._create_grid_button(label, icon, None, callback)
+            grid.attach(btn, col, row, 1, 1)
+            col += 1
+            if col >= MAX_COLS:
+                col = 0
+                row += 1
+
+        # 1. Elementos estándar (siempre visibles)
+        add_btn("Párrafo", "text-x-generic-symbolic", self._on_wrap_paragraph_action)
+        add_btn("H1", "format-text-larger-symbolic", lambda *a: self._on_wrap_heading(None, None, 1))
+        add_btn("H2", "format-text-large-symbolic", lambda *a: self._on_wrap_heading(None, None, 2))
+        add_btn("H3", "format-text-bold-symbolic", lambda *a: self._on_wrap_heading(None, None, 3))
+        add_btn("Cita", "format-quote-symbolic", self._on_wrap_blockquote_action)
+        
+        # 2. Estilos personalizados (Expandibles o en lista)
+        # Si hay estilos CSS, los mostramos
+        if css_styles:
+            # Etiqueta separadora
+            if col != 0:
+                row += 1
+                col = 0
+            
+            separator = Gtk.Label(label="<b>Estilos CSS</b>")
+            separator.set_use_markup(True)
+            separator.set_halign(Gtk.Align.START)
+            self.format_page_content.append(separator)
+            
+            # Lista de estilos
+            style_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+            self.format_page_content.append(style_box)
+
+            for element, styles in css_styles.items():
+                if element == '*': continue
+                
+                elem_name = display_names.get(element, element.upper())
+                
+                for style in styles:
+                    desc = style.description or style.class_name
+                    label = f"{elem_name}: {desc}"
+                    
+                    btn = Gtk.Button(label=label)
+                    btn.add_css_class("flat")
+                    btn.set_halign(Gtk.Align.START)
+                    
+                    # Usar closure para capturar valores
+                    css_class_copy = style
+                    
+                    def make_callback(c):
+                        return lambda *a: self._apply_css_style(c)
+                        
+                    btn.connect('clicked', make_callback(css_class_copy))
+                    style_box.append(btn)
+
+    def _apply_css_style(self, css_class):
+        """Helper para aplicar estilo desde el menú"""
+        # Usamos el método existente en DynamicStyleContextMenu logic
+        # pero adaptado aquí o llamando al manager si tiene método
+        
+        # Implementación simple inline para no depender de la clase externa actions
+        buffer = self.source_buffer
+        if not buffer.get_has_selection():
+            return
+            
+        start, end = buffer.get_selection_bounds()
+        text = buffer.get_text(start, end, False)
+        
+        tag = css_class.element if css_class.element != '*' else 'span'
+        html = f'<{tag} class="{css_class.class_name}">{text}</{tag}>'
+        
+        buffer.delete(start, end)
+        buffer.insert(start, html)
+        self.context_popover.popdown()
+        self._update_preview_after_edit()
+
+
+
+    def _create_hooks_submenu_page(self):
+        """Crea la página de submenú de Hooks"""
+        page_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        # Botón de volver
+        back_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        back_btn = Gtk.Button()
+        back_btn.set_icon_name("go-previous-symbolic")
+        back_btn.set_tooltip_text("Volver")
+        back_btn.connect('clicked', lambda w: self.menu_stack.set_visible_child_name("main"))
+        back_box.append(back_btn)
+
+        back_label = Gtk.Label()
+        back_label.set_markup("<b>Gestión de Hooks</b>")
+        back_label.set_hexpand(True)
+        back_label.set_halign(Gtk.Align.START)
+        back_box.append(back_label)
+
+        page_box.append(back_box)
+
+        # Grilla de opciones
         grid = Gtk.Grid()
         grid.set_row_spacing(8)
         grid.set_column_spacing(8)
         grid.set_column_homogeneous(True)
 
-        # Fila 0: Párrafo, H1, H2
-        p_btn = self._create_grid_button("Párrafo", "text-x-generic-symbolic", None, self._on_wrap_paragraph_action)
-        h1_btn = self._create_grid_button("H1", "format-text-larger-symbolic", None, lambda *a: self._on_wrap_heading(None, None, 1))
-        h2_btn = self._create_grid_button("H2", "format-text-large-symbolic", None, lambda *a: self._on_wrap_heading(None, None, 2))
+        # Botones
+        create_hook_btn = self._create_grid_button(
+            "Crear Hook", 
+            "list-add-symbolic", 
+            None, 
+            self._on_insert_hook_action
+        )
+        
+        use_hook_btn = self._create_grid_button(
+            "Usar Hook", 
+            "link-symbolic", 
+            None, 
+            self._on_insert_link_action
+        )
 
-        grid.attach(p_btn, 0, 0, 1, 1)
-        grid.attach(h1_btn, 1, 0, 1, 1)
-        grid.attach(h2_btn, 2, 0, 1, 1)
-
-        # Fila 1: H3, Blockquote
-        h3_btn = self._create_grid_button("H3", "format-text-bold-symbolic", None, lambda *a: self._on_wrap_heading(None, None, 3))
-        quote_btn = self._create_grid_button("Cita", "format-quote-symbolic", None, self._on_wrap_blockquote_action)
-
-        grid.attach(h3_btn, 0, 1, 1, 1)
-        grid.attach(quote_btn, 1, 1, 1, 1)
+        grid.attach(create_hook_btn, 0, 0, 1, 1)
+        grid.attach(use_hook_btn, 1, 0, 1, 1)
 
         page_box.append(grid)
 
@@ -512,40 +684,173 @@ class CentralEditor:
 
         # Conectar acción
         if submenu_page:
-            # Navegación a submenú SIN cerrar el popover
-            button.connect('clicked', lambda w: self.menu_stack.set_visible_child_name(submenu_page))
+            # Navegación a submenú SIN
+            def switch_page(widget):
+                if submenu_page == "format":
+                    self._rebuild_format_page()
+                self.menu_stack.set_visible_child_name(submenu_page)
+            button.connect('clicked', switch_page)
         elif action_callback:
             # Acción directa Y cerrar popover
             def execute_and_close(widget):
                 action_callback(None, None)
                 self.context_popover.popdown()
             button.connect('clicked', execute_and_close)
-
         return button
 
     def _on_right_click(self, gesture, n_press, x, y):
         """Maneja el clic derecho para mostrar el popover"""
-        from gi.repository import Gdk
+        if n_press != 1:
+            return
 
-        # Capturar el evento para evitar que otros controladores lo procesen
-        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
-
-        # Configurar posición del popover
+        # Calcular posición para el popover
+        # En GTK4, el popover es relativo al widget padre
+        # Usamos un rectángulo de 1x1 en la posición del clic
         rect = Gdk.Rectangle()
         rect.x = int(x)
         rect.y = int(y)
         rect.width = 1
         rect.height = 1
+        
         self.context_popover.set_pointing_to(rect)
-
-        # Volver a la página principal
-        self.menu_stack.set_visible_child_name("main")
-
-        # Mostrar popover
-        self.context_popover.set_parent(self.source_view)
         self.context_popover.popup()
 
         return True  # Evento manejado
+
+    def _on_ctrl_click(self, gesture, n_press, x, y):
+        """
+        Maneja Ctrl+Click para 'Ir a Definición' (CSS)
+        """
+        # Verificar tecla Control
+        modifiers = gesture.get_current_event_state()
+        if not (modifiers & Gdk.ModifierType.CONTROL_MASK):
+            return
+
+        # Obtener posición en el buffer
+        buffer_x, buffer_y = self.source_view.window_to_buffer_coords(
+            GtkSource.ViewGutterPosition.TEXT,
+            int(x), int(y)
+        )
+        
+        iter_at_click = self.source_view.get_iter_at_location(buffer_x, buffer_y)
+        
+        if not iter_at_click:
+            return
+
+        # Intentar obtener la palabra bajo el cursor
+        # Expandir a palabra completa (incluyendo guiones/guiones bajos comunes en CSS)
+        start = iter_at_click.copy()
+        end = iter_at_click.copy()
+        
+        if not start.starts_word():
+            start.backward_word_start()
+        
+        if not end.ends_word():
+            end.forward_word_end()
+            
+        word = self.source_buffer.get_text(start, end, False).strip()
+        
+        if not word:
+            return
+
+        # Heurística simple: ¿Es una clase o ID?
+        # Revisar el contexto inmediato izq/der para ver si hay 'class="' o 'id="'
+        # Esto es complejo hacerlo perfecto con regex en el buffer, 
+        # así que buscamos la definición asumiendo que es clase o ID.
+        
+        print(f"[GoToDef] Buscando definición para: {word}")
+        
+        # Buscar en archivos CSS
+        self._find_and_goto_css_definition(word)
+
+    def _find_and_goto_css_definition(self, name: str):
+        """Busca una clase (.name) o ID (#name) en los archivos CSS y salta a ella"""
+        if not self.main_window.core:
+            return
+
+        # Buscar en todos los items del manifest que sean CSS
+        # self.main_window.core.items_by_id es un dict de ManifestItem
+        
+        css_files = []
+        try:
+            for item in self.main_window.core.items_by_id.values():
+                if item.media_type and 'css' in item.media_type:
+                    css_files.append(item.href)
+                elif item.href.lower().endswith('.css'):
+                    css_files.append(item.href)
+        except AttributeError:
+            # Fallback si items_by_id no está disponible directamente
+            return
+
+        found = False
+        target_file = None
+        target_line = 0
+        
+        import re
+        
+        # Posibles selectores para 'name': .name (clase), #name (id), o name (tag)
+        # Priorizamos clase y id
+        selectors_to_try = [f".{name}", f"#{name}", name]
+        
+        for css_href in css_files:
+            try:
+                content = self.main_window.core.read_text(css_href)
+                
+                for selector in selectors_to_try:
+                    # Regex para encontrar la definición:
+                    # selector + espacio/newline/bracket
+                    # Escapamos el selector por si acaso
+                    esc_selector = re.escape(selector)
+                    
+                    # Pattern: selector seguido de { al principio de línea o después de } o ;
+                    # Simplificado: buscaremos el selector literal seguido de {
+                    
+                    # Buscamos la primera ocurrencia del selector seguido eventualmente de {
+                    pattern = f"{esc_selector}\s*{{|{esc_selector}\s*,"
+                    
+                    match = re.search(pattern, content)
+                    if match:
+                        # Encontrado!
+                        target_file = css_href
+                        # Calcular número de línea (1-based)
+                        target_line = content[:match.start()].count('\n') + 1
+                        print(f"[GoToDef] Encontrado {selector} en {css_href}:{target_line}")
+                        found = True
+                        break
+                
+                if found:
+                    break
+                    
+            except Exception as e:
+                print(f"[GoToDef] Error leyendo {css_href}: {e}")
+
+        if found and target_file:
+            # Abrir archivo y saltar a la línea
+            self.load_resource(target_file)
+            
+            # Esperar un momento a que cargue el buffer y scrollear
+            GLib.timeout_add(100, lambda: self._scroll_to_line(target_line))
+        else:
+            print(f"[GoToDef] No se encontró definición para {name}")
+            # Feedback visual opcional (ej. flash bar)
+
+    def _scroll_to_line(self, line_num: int):
+        """Mueve el cursor a la línea especificada y la centra"""
+        if not self.source_buffer:
+            return False
+            
+        # Obtener iterador al inicio de la línea (0-based index internally for get_iter_at_line)
+        # line_num viene como 1-based del count('\n') + 1
+        target_iter = self.source_buffer.get_iter_at_line(line_num - 1)
+        
+        # Mover cursor
+        self.source_buffer.place_cursor(target_iter)
+        
+        # Scrollear para mostrar
+        self.source_view.scroll_to_iter(target_iter, 0.2, True, 0.5, 0.5)
+        
+        # Resaltar la línea (opcional)
+        return False
 
     # Métodos wrapper para las acciones (para mantener compatibilidad)
     def _on_wrap_paragraph_action(self, action, param):
@@ -569,14 +874,19 @@ class CentralEditor:
 
     def _on_insert_image_action(self, action, param):
         """Ejecuta la acción de insertar imagen"""
-        # Esta funcionalidad debería estar en image_selector_dialog
-        if hasattr(self, '_show_image_selector'):
-            self._show_image_selector()
+        from .image_selector_dialog import ImageSelectorDialog
+        dialog = ImageSelectorDialog(self.main_window)
+        dialog.show_dialog()
 
     def _on_insert_hook_action(self, action, param):
         """Ejecuta la acción de crear hook inteligente"""
         if hasattr(self, 'smart_hook_inserter'):
             self.smart_hook_inserter.show_hook_insertion_dialog()
+
+    def _on_insert_link_action(self, action, param):
+        """Ejecuta la acción de insertar enlace inteligente"""
+        if hasattr(self, 'smart_link_inserter'):
+            self.smart_link_inserter.show_link_insertion_dialog()
 
     def _setup_search_panel(self):
         """Configura el panel de búsqueda deslizable"""
@@ -901,18 +1211,9 @@ class CentralEditor:
             # Foco al editor
             self.source_view.grab_focus()
 
-        # Configurar resaltado de sintaxis XML
-        lang_manager = GtkSource.LanguageManager.get_default()
-        language = lang_manager.get_language('xml')
 
-        self.source_buffer.set_language(language)
-        self.source_buffer.set_text(content)
 
-        # Marcar que estamos editando el OPF
-        self.current_resource_type = "opf"
 
-        # Limpiar preview (el OPF no tiene preview)
-        self.main_window.sidebar_right.web_view.load_html("", None)
     
     def get_current_text(self) -> str:
         """Obtiene el texto actual del editor"""

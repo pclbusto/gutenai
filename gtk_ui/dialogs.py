@@ -626,7 +626,23 @@ p {
             return
 
         # Obtener documentos del EPUB
-        documents = self.main_window.core.find_items(kind=KIND_DOCUMENT)
+        # Obtener documentos del EPUB en orden del spine (lectura)
+        spine_ids = self.main_window.core.get_spine()
+        documents = []
+        
+        # 1. Agregar documentos del spine en orden
+        for item_id in spine_ids:
+            item = self.main_window.core.items_by_id.get(item_id)
+            if item and item.media_type in ("application/xhtml+xml", "text/html"):
+                documents.append(item)
+                
+        # 2. Agregar cualquier otro documento (huérfano) al final
+        all_docs = self.main_window.core.find_items(kind=KIND_DOCUMENT)
+        added_hrefs = {d.href for d in documents}
+        
+        for doc in all_docs:
+            if doc.href not in added_hrefs:
+                documents.append(doc)
         if not documents:
             self.main_window.show_error("No hay documentos para exportar")
             return

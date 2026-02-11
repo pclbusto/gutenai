@@ -305,6 +305,9 @@ class SidebarRight:
 
             # INYECTAR CSS DE MARCADORES DE ANCLAJE (hooks)
             html_content = self._inject_hook_markers_css(html_content)
+
+            # ANTI-CACHE: Agregar timestamp a los archivos CSS para forzar recarga
+            html_content = self._bust_css_cache(html_content)
             
             # INYECTAR JS DE SINCRONIZACIÓN INVERSA
             html_content = self._inject_reverse_sync_js(html_content)
@@ -392,6 +395,43 @@ class SidebarRight:
             html_content = hook_marker_css + '\n' + html_content
 
         return html_content
+
+    def _bust_css_cache(self, html_content: str) -> str:
+        """
+        Agrega un timestamp a todas las referencias CSS para evitar caché de WebKit.
+        Transforma: <link href="style.css" ...>
+        En: <link href="style.css?v=12345678" ...>
+        """
+        import time
+        import re
+        
+        timestamp = int(time.time())
+        
+        # Regex para encontrar tags link de stylesheet
+        # Captura 1: todo lo anterior al href
+        # Captura 2: la comilla de apertura del href
+        # Captura 3: la URL del CSS
+        # Captura 4: la comilla de cierre
+        # Captura 5: el resto del tag
+        pattern = r'(<link\s+[^>]*rel=["\']stylesheet["\'][^>]*href=)(["\'])([^"\']+)(["\'])([^>]*>)'
+        
+        def replacer(match):
+            prefix = match.group(1)
+            quote1 = match.group(2)
+            url = match.group(3)
+            quote2 = match.group(4)
+            suffix = match.group(5)
+            
+            # Si ya tiene una query string, usamos &
+            separator = "&" if "?" in url else "?"
+            new_url = f"{url}{separator}v={timestamp}"
+            
+            # Debug
+            # print(f"[Preview] Cache busting: {url} -> {new_url}")
+            
+            return f"{prefix}{quote1}{new_url}{quote2}{suffix}"
+            
+        return re.sub(pattern, replacer, html_content, flags=re.IGNORECASE)
 
     def _inject_reverse_sync_js(self, html_content: str) -> str:
         """Inyecta JavaScript para detectar clics y enviarlos a Python"""

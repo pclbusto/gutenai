@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Cambiar al directorio del proyecto
-cd "/home/pedro/PycharmProjects/gutenai"
+cd "/home/pedro/Documents/Python Projects/gutenai"
 
 # Configurar variables de entorno para reducir warnings de portales
 export GDK_BACKEND=x11
